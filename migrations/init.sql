@@ -2,7 +2,7 @@ CREATE TABLE public."user"
 (
     ID SERIAL PRIMARY KEY NOT NULL,
     about VARCHAR(1000),
-    email VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
     fullname VARCHAR(300),
     nickname VARCHAR(100) NOT NULL
 );
@@ -12,7 +12,7 @@ CREATE UNIQUE INDEX user_nickname_uindex ON public."user" (nickname);
 CREATE TABLE public.forum
 (
     ID SERIAL PRIMARY KEY NOT NULL,
-    slug VARCHAR(300),
+    slug VARCHAR(300) NOT NULL,
     title VARCHAR(300),
     user_ID INT NOT NULL,
     CONSTRAINT forum_user_id_fk FOREIGN KEY (user_ID) REFERENCES "user" (id)
@@ -32,6 +32,7 @@ CREATE TABLE public.thread
     CONSTRAINT thread_user_id_fk FOREIGN KEY (author_ID) REFERENCES "user" (id),
     CONSTRAINT thread_forum_id_fk FOREIGN KEY (forum_ID) REFERENCES forum (id)
 );
+CREATE UNIQUE INDEX "thread_slug_uindex" ON public.thread (slug);
 
 CREATE TABLE public.post
 (

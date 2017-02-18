@@ -5,13 +5,16 @@ using KashirinDBApi.Controllers.DataContracts;
 using Npgsql;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
+using KashirinDBApi.Controllers.Extensions;
+using KashirinDBApi.Controllers.Helpers;
+
 
 namespace KashirinDBApi.Controllers
 {
     public class UserController : Controller
     {
        
-        #region sql
+    #region sql
 
         private static readonly string sqlInsertUser = @"
             with tuple as (
@@ -100,17 +103,17 @@ namespace KashirinDBApi.Controllers
         
         
 
-        #endregion
+    #endregion
 
-        #region Fields
+    #region Fields
         private readonly IConfiguration Configuration;
-        #endregion
-        #region Constructor
+    #endregion
+    #region Constructor
         public UserController(IConfiguration Configuration)
         {
             this.Configuration = Configuration;
         }
-        #endregion
+    #endregion
 
 
         private void BuildQuery(UserProfileDataContract profile, string name, NpgsqlCommand cmd)
@@ -167,13 +170,15 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    // Retrieve all rows
                     cmd.CommandText = sqlInsertUser;
-                    cmd.Parameters.Add(new NpgsqlParameter("@about", (object)userProfile.About ?? DBNull.Value ));
-                    cmd.Parameters.Add(new NpgsqlParameter("@email", (object)userProfile.Email ?? DBNull.Value));
-                    cmd.Parameters.Add(new NpgsqlParameter("@fullname", (object)userProfile.Fullname ?? DBNull.Value));
+                    cmd.Parameters.Add(
+                        Helper.NewNullableParameter("@about", userProfile.About));
+                    cmd.Parameters.Add(
+                        Helper.NewNullableParameter("@email", userProfile.Email));
+                    cmd.Parameters.Add(
+                        Helper.NewNullableParameter("@fullname", userProfile.Fullname));
                     cmd.Parameters.Add(new NpgsqlParameter("@nickname", name));
-                    
+
                     using (var reader = cmd.ExecuteReader())
                     {
                         while(reader.Read())
@@ -187,9 +192,9 @@ namespace KashirinDBApi.Controllers
                             outputProfiles.Add(
                                 new UserProfileDataContract
                                 {
-                                    About = reader.GetString(2),
-                                    Email = reader.GetString(3),
-                                    Fullname = reader.GetString(4),
+                                    About = reader.GetValueOrDefault(2, ""),
+                                    Email = reader.GetValueOrDefault(3, ""),
+                                    Fullname = reader.GetValueOrDefault(4, ""),
                                     Nickname = reader.GetString(5),
                                 }
                             );
@@ -216,30 +221,20 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    // Retrieve all rows
-                    
                     BuildQuery(userProfile, name, cmd);
-
-                    
-
                     using (var reader = cmd.ExecuteReader())
                     {
                         if(reader.Read())
                         {
                             profile = new UserProfileDataContract();
-                            profile.About = !reader.IsDBNull(0) ?
-                                        reader.GetString(0) :
-                                        "";
-                            profile.Email = reader.GetString(1);
-                            profile.Fullname = !reader.IsDBNull(2) ?
-                                                reader.GetString(2) :
-                                                "";
+                            profile.About = reader.GetValueOrDefault(0, "");
+                            profile.Email = reader.GetValueOrDefault(1, "");
+                            profile.Fullname = reader.GetValueOrDefault(2, "");
                             profile.Nickname = reader.GetString(3);
                             
                             Response.StatusCode = reader.GetString(4) == "updated" ?
                                                       200:
                                                       409;
-                            
                         }
                         else
                         {
@@ -263,7 +258,6 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    // Retrieve all rows
                     cmd.CommandText = sqlSelectProfile;
                     cmd.Parameters.Add(new NpgsqlParameter("@name", name));
                     
@@ -272,13 +266,9 @@ namespace KashirinDBApi.Controllers
                         if(reader.Read())
                         {
                             profile = new UserProfileDataContract();
-                            profile.About = !reader.IsDBNull(0) ?
-                                        reader.GetString(0) :
-                                        "";
-                            profile.Email = reader.GetString(1);
-                            profile.Fullname = !reader.IsDBNull(2) ?
-                                                reader.GetString(2) :
-                                                "";
+                            profile.About = reader.GetValueOrDefault(0, "");
+                            profile.Email = reader.GetValueOrDefault(1, "");
+                            profile.Fullname = reader.GetValueOrDefault(2, "");
                             profile.Nickname = reader.GetString(3);
                         }
                     }

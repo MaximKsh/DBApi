@@ -1,0 +1,1 @@
+curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json' 'localhost:5000/api/service/clear'
