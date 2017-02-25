@@ -10,7 +10,7 @@ namespace KashirinDBApi.Controllers.DataContracts
         [DataMember(Name = "nickname")]
         public string Nickname { get; set; }
         [DataMember(Name = "voice")]
-        public long voice { get; set; }
+        public long Voice { get; set; }
     }
 
 }

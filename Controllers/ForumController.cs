@@ -7,6 +7,7 @@ using Npgsql;
 using System;
 using KashirinDBApi.Controllers.Extensions;
 using KashirinDBApi.Controllers.Helpers;
+using System.Collections.Generic;
 
 namespace KashirinDBApi.Controllers
 {
@@ -102,6 +103,59 @@ namespace KashirinDBApi.Controllers
                 f.slug = @slug
             ;
         ";
+
+
+        private static readonly string sqlSelectForumThreads = @"
+        select
+            u.nickname,
+            t.created,
+            f.slug,
+            t.id,
+            t.message,
+            t.slug,
+            t.title,
+            t.votes
+        from thread t
+        inner join ""user"" u on t.author_id = u.ID
+        inner join forum f on t.forum_id = f.id
+        where
+            f.slug = @slug
+            {0}
+        order by t.create {1}
+        {2}
+        ;
+        ";
+
+
+        private static readonly string sqlSelectForumUsers = @"
+            with f as
+            (
+                select
+                    ID
+                from forum
+                where slug = @slug
+                limit 1
+            )
+            select distinct
+                u.about,
+                u.email,
+                u.fullname,
+                u.nickname
+            from ""user"" u
+            left join thread t on
+                            u.ID = t.author_ID
+                            and t.forum_id = (select ID from f limit 1)
+                            {0}
+            left join post p on
+                            u.ID = p.author_ID
+                            and p.forum_id = (select ID from f limit 1)
+                            {0}
+            where (p.ID is not null or t.ID is not null)
+            order by u.nickname {1}
+            {2}
+            ;
+        ";
+
     #endregion
 
     #region Fields
@@ -172,8 +226,7 @@ namespace KashirinDBApi.Controllers
         {
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(ThreadDetailsDataContract));
             var thread = (ThreadDetailsDataContract)js.ReadObject(Request.Body);
-            if(thread.Author == null 
-                || thread.Forum == null)
+            if(thread.Author == null)
             {
                 Response.StatusCode = 400;
                 return new JsonResult(string.Empty);
@@ -265,18 +318,84 @@ namespace KashirinDBApi.Controllers
         
         [Route("api/forum/{slug}/threads")]
         [HttpGet]
-        public JsonResult Threads(string slug, int limit, DateTime since, bool desc = false)
+        public JsonResult Threads(string slug, int? limit, DateTime? since, bool desc = false)
         {
-
-            
-            return new JsonResult( "{\"вжух\": \"все форум slug threads \"}" );
+            List<ThreadDetailsDataContract> threads = new List<ThreadDetailsDataContract>();
+            using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
+            {
+                conn.Open();
+                using (var cmd = new NpgsqlCommand())
+                {
+                    cmd.Connection = conn;
+                    cmd.CommandText = String.Format(
+                        sqlSelectForumThreads,
+                        since.HasValue ? "and created >= '" + since.Value.ToString("yyyy-MM-dd") + "'": "",
+                        desc ? "desc" : "",
+                        limit.HasValue && 0 < limit ? $"limit + {limit.Value}" : ""
+                    );
+                    cmd.Parameters.Add(new NpgsqlParameter("@slug", slug));
+                    
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            var thread = new ThreadDetailsDataContract()
+                            {
+                                Author = reader.GetValueOrDefault(0, ""),
+                                Created = reader.GetDateTime(1).ToString(),
+                                Forum = reader.GetValueOrDefault(2, ""),
+                                ID = reader.GetInt32(3),
+                                Message = reader.GetValueOrDefault(4, ""),
+                                Slug = reader.GetValueOrDefault(5, ""),
+                                Title = reader.GetValueOrDefault(6, ""),
+                                Votes = reader.GetValueOrDefault(7, 0)
+                            };
+                            threads.Add(thread);
+                            Response.StatusCode = 200;
+                        }
+                    }
+                }
+            }
+            return new JsonResult(Response.StatusCode == 200  ? threads as object : string.Empty);
         }
 
         [Route("api/forum/{slug}/users")]
         [HttpGet]
-        public JsonResult Users(string slug)
+        public JsonResult Users(string slug, int? limit, DateTime? since, bool desc = false)
         {
-            return new JsonResult( "{\"вжух\": \"все форум slug usesr \"}" );
+            List<UserProfileDataContract> users = new List<UserProfileDataContract>();
+            using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
+            {
+                conn.Open();
+                using (var cmd = new NpgsqlCommand())
+                {
+                    cmd.Connection = conn;
+                    cmd.CommandText = String.Format(
+                        sqlSelectForumUsers,
+                        since.HasValue ? "and created >= '" + since.Value.ToString("yyyy-MM-dd") + "'": "",
+                        desc ? "desc" : "",
+                        limit.HasValue && 0 < limit ? $"limit + {limit.Value}" : ""
+                    );
+                    cmd.Parameters.Add(new NpgsqlParameter("@slug", slug));
+                    
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            var user = new UserProfileDataContract()
+                            {
+                                About = reader.GetValueOrDefault(0, ""),
+                                Email = reader.GetValueOrDefault(1, ""),
+                                Fullname = reader.GetValueOrDefault(2, ""),
+                                Nickname = reader.GetString(3)
+                            };
+                            users.Add(user);
+                            Response.StatusCode = 200;
+                        }
+                    }
+                }
+            }
+            return new JsonResult(Response.StatusCode == 200  ? users as object : string.Empty);
         }
     }
 }

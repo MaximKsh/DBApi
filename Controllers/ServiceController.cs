@@ -68,7 +68,7 @@ namespace KashirinDBApi.Controllers
             {
                 conn.Open();
                 using (var cmd = new NpgsqlCommand())
-                {using (var reader = cmd.ExecuteReader())
+                {
                     cmd.Connection = conn;
                     cmd.CommandText = sqlStatus;
                     using (var reader = cmd.ExecuteReader())

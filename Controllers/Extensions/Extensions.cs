@@ -10,5 +10,13 @@ namespace KashirinDBApi.Controllers.Extensions
                     (T)reader.GetValue(ordinal) : 
                     defValue;
         }
+
+        public static T GetValueOrDefault<T>(this NpgsqlDataReader reader, string columnName, T defValue)
+        {
+            int ordinal = reader.GetOrdinal(columnName);
+            return !reader.IsDBNull(ordinal) ?
+                    (T)reader.GetValue(ordinal) : 
+                    defValue;
+        }
     }   
 }
