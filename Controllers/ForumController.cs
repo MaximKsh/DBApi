@@ -147,32 +147,32 @@ namespace KashirinDBApi.Controllers
         ;
         ";
 
-
+        private static readonly string sqlPreselectForumBySlug = @"
+            select
+                ID
+            from forum
+            where lower(slug) = lower(@slug)
+            limit 1
+        ";
         private static readonly string sqlSelectForumUsers = @"
-            with f as
-            (
-                select
-                    ID
-                from forum
-                where lower(slug) = lower(@slug)
-                limit 1
-            )
             select distinct
                 u.about,
                 u.email,
                 u.fullname,
-                u.nickname
+                u.nickname,
+                convert_to((u.nickname), 'utf8')
             from ""user"" u
             left join thread t on
                             u.ID = t.author_ID
-                            and t.forum_id = (select ID from f limit 1)
-                            {0}
+                            and t.forum_id = @forum_id
+                            
             left join post p on
                             u.ID = p.author_ID
-                            and p.forum_id = (select ID from f limit 1)
-                            {0}
-            where (p.ID is not null or t.ID is not null)
-            order by u.nickname {1}
+                            and p.forum_id = @forum_id
+                           
+            where (p.ID is not null or t.ID is not null) {0}
+            order by 
+                convert_to((u.nickname), 'utf8') {1}
             {2}
             ;
         ";
@@ -367,7 +367,7 @@ namespace KashirinDBApi.Controllers
                             sqlSelectForumThreads,
                             since != null ? $"and created {(desc ? "<=" : ">=")} '{since.Replace("'", "''")}'": "",
                             desc ? "desc" : "",
-                            limit.HasValue && 0 < limit ? $"limit + {limit.Value}".Replace("'", "''") : ""
+                            limit.HasValue && 0 < limit ? $"limit + {limit.Value}" : ""
                         );
                         cmd.Parameters.Add(new NpgsqlParameter("@id", preselectedID.Value));
                         
@@ -411,33 +411,56 @@ namespace KashirinDBApi.Controllers
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
                 conn.Open();
+                long? forumID = null;
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    cmd.CommandText = String.Format(
-                        sqlSelectForumUsers,
-                        since != null ? $"and created {(desc ? "<=" : ">=")} '{since.Replace("'", "''")}'": "",
-                        desc ? "desc" : "",
-                        limit.HasValue && 0 < limit ? $"limit + {limit.Value}".Replace("'", "''") : ""
-                    );
+                    cmd.CommandText = sqlPreselectForumBySlug;
                     cmd.Parameters.Add(new NpgsqlParameter("@slug", slug));
-                    
-                    using (var reader = cmd.ExecuteReader())
+                    using(var reader = cmd.ExecuteReader())
                     {
-                        while (reader.Read())
+                        if(reader.Read())
                         {
-                            var user = new UserProfileDataContract()
-                            {
-                                About = reader.GetValueOrDefault(0, ""),
-                                Email = reader.GetValueOrDefault(1, ""),
-                                Fullname = reader.GetValueOrDefault(2, ""),
-                                Nickname = reader.GetString(3)
-                            };
-                            users.Add(user);
-                            Response.StatusCode = 200;
+                            forumID = reader.GetInt32(0);
+                        }
+                        else
+                        {
+                            Response.StatusCode = 404;
                         }
                     }
                 }
+
+                if(forumID.HasValue)
+                {
+                    using (var cmd = new NpgsqlCommand())
+                    {
+                        cmd.Connection = conn;
+                        cmd.CommandText = String.Format(
+                            sqlSelectForumUsers,
+                            since != null ? $"and convert_to((u.nickname), 'utf8') {(desc ? "<" : ">")} '{since.Replace("'", "''")}'": "",
+                            desc ? "desc" : "",
+                            limit.HasValue && 0 < limit ? $"limit + {limit.Value}" : ""
+                        );
+                        cmd.Parameters.Add(new NpgsqlParameter("@forum_id", forumID.Value));
+                        
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var user = new UserProfileDataContract()
+                                {
+                                    About = reader.GetValueOrDefault(0, ""),
+                                    Email = reader.GetValueOrDefault(1, ""),
+                                    Fullname = reader.GetValueOrDefault(2, ""),
+                                    Nickname = reader.GetString(3)
+                                };
+                                users.Add(user);
+                                Response.StatusCode = 200;
+                            }
+                        }
+                    }
+                }
+                
             }
             return new JsonResult(Response.StatusCode == 200  ? users as object : string.Empty);
         }

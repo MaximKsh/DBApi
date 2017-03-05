@@ -8,6 +8,7 @@ using Npgsql;
 using KashirinDBApi.Controllers.Extensions;
 using KashirinDBApi.Controllers.Helpers;
 using NpgsqlTypes;
+using System.Linq;
 
 namespace KashirinDBApi.Controllers
 {
@@ -27,7 +28,7 @@ namespace KashirinDBApi.Controllers
         ";
 
         private static readonly string sqlInsertPost = @"
-            insert into post(author_id, forum_id, message, parent_id, thread_id)
+            insert into post(author_id, created, forum_id, message, parent_id, thread_id)
                 (
                     select
                         *
@@ -40,13 +41,17 @@ namespace KashirinDBApi.Controllers
                                 where nickname = @nickname
                                 limit 1
                             ) AS author_id,
-                            @forum_id AS forum_id,
-                            @message AS message,
-                            case when @parent_id=0
+                        case when @created is null
+                            then now()
+                            else @created
+                        end as created,
+                        @forum_id AS forum_id,
+                        @message AS message,
+                        case when @parent_id=0
                             then 0
                             else (select ID from post where ID = @parent_id limit 1)
-                            end  as parent_id,
-                            @thread_id as thread_id
+                        end  as parent_id,
+                        @thread_id as thread_id
                     ) t
                     where t.author_id is not null
                             and t.parent_id is not null
@@ -98,23 +103,49 @@ namespace KashirinDBApi.Controllers
             ;
         ";
 
-        private static readonly string sqlSelectPosts = @"
+        private static readonly string sqlSelectPostsFlat = @"
             select
                 *
-            from (
-            with recursive recursetree (
-                id,
-                path,
-                author_id,
-                created,
-                forum_id,
-                isedited,
-                message,
-                parent_id,
-                thread_id) as (
+            from
+            (
+                select
+                    p.id,
+                    u.nickname,
+                    p.created,
+                    p.isedited,
+                    p.message,
+                    p.parent_id,
+                    row_number() over (order by created {0}, p.id {0}) as rn
+                from post p
+                inner join ""user"" u on u.id = p.author_id
+                where p.thread_id = @id
+                order by created {0}, p.id {0} -- asc desc
+            ) t
+            where 
+                @from <= rn and rn < @to
+        ;";
+
+        private static readonly string sqlSelectPosts = @"
+            select *
+            from 
+            (
+                with recursive
+                    recursetree (
+                                id,
+                                full_path,
+                                path,
+                                author_id,
+                                created,
+                                forum_id,
+                                isedited,
+                                message,
+                                parent_id,
+                                thread_id) as
+                (
                     select
                         id,
-                        array_append('{}' :: INT [], id),
+                        array_append('{1}' :: INT [], id),
+                        '{1}' :: INT [],
                         author_id,
                         created,
                         forum_id,
@@ -125,9 +156,11 @@ namespace KashirinDBApi.Controllers
                     from post
                     where
                         parent_id = 0
+                        and thread_id = @id
                     union all
                     select
                         p2.id,
+                        array_append(full_path, p2.id),
                         array_append(path, p2.id),
                         p2.author_id,
                         p2.created,
@@ -137,28 +170,93 @@ namespace KashirinDBApi.Controllers
                         p2.parent_id,
                         p2.thread_id
                     from post p2
-                    inner join recursetree rt on rt.id = p2.parent_id
-            )
-            select
-                id,
-                array_to_string(path, '.') AS path,
-                author_id,
-                created,
-                forum_id,
-                isedited,
-                message,
-                parent_id,
-                thread_id
-            from recursetree
-            -- order by path if tree or parent tree, created if flat
-            {0}
-            --order by path
-            --order by created
-            )a
-            -- where a.path > '12.20'
-            {1}
-            --
-        
+                    inner join recursetree rt on rt.id = p2.parent_id 
+                                             and p2.thread_id = @id
+                )
+                select
+                    p.id,
+                    u.nickname,
+                    created,
+                    isedited,
+                    message,
+                    parent_id,
+                    row_number() over (order by full_path {0}) as rn
+                from recursetree p 
+                inner join ""user"" u on author_id = u.id    
+                order by full_path {0}
+            ) t
+            where 
+                @from <= rn and rn < @to
+        ";
+
+        private static readonly string sqlSelectParentPosts = @"
+            select *
+            from
+            (
+                select
+                    id,
+                    row_number() over (order by created {0}) as rn
+                from post
+                where
+                    parent_id = 0
+                    and thread_id = @id
+            )t
+            where @from <= rn and rn < @to
+        ";
+
+        private static readonly string sqlSelectPostsByParentID = @"
+                with recursive
+                    recursetree (
+                                id,
+                                full_path,
+                                path,
+                                author_id,
+                                created,
+                                forum_id,
+                                isedited,
+                                message,
+                                parent_id,
+                                thread_id) as
+                (
+                    select
+                        id,
+                        array_append('{1}' :: INT [], id),
+                        '{1}' :: INT [],
+                        author_id,
+                        created,
+                        forum_id,
+                        isedited,
+                        message,
+                        parent_id,
+                        thread_id
+                    from post
+                    where
+                        id in ( {2} )
+                    union all
+                    select
+                        p2.id,
+                        array_append(full_path, p2.id),
+                        array_append(path, p2.id),
+                        p2.author_id,
+                        p2.created,
+                        p2.forum_id,
+                        p2.isedited,
+                        p2.message,
+                        p2.parent_id,
+                        p2.thread_id
+                    from post p2
+                    inner join recursetree rt on rt.id = p2.parent_id 
+                )
+                select
+                    p.id,
+                    u.nickname,
+                    created,
+                    isedited,
+                    message,
+                    parent_id
+                from recursetree p 
+                inner join ""user"" u on author_id = u.id    
+                order by full_path {0}
         ";
 
 
@@ -237,7 +335,7 @@ namespace KashirinDBApi.Controllers
                     sqlPreselectThreadAndForum,
                     id != -1 ?
                         "t.ID = @id":
-                        "t.slug = @slug"
+                        "lower(t.slug) = lower(@slug)"
                 );
                 cmd.Parameters.Add( 
                     id != -1 ?
@@ -277,6 +375,7 @@ namespace KashirinDBApi.Controllers
                 cmd.Connection = conn;
                 cmd.CommandText = sqlInsertPost;
                 cmd.Parameters.Add(Helper.NewNullableParameter("@nickname", post.Author));
+                cmd.Parameters.Add(Helper.NewNullableParameter("@created", post.Created, NpgsqlDbType.Timestamp));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_id", forum_id, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@thread_id", thread_id, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@parent_id", post.Parent, NpgsqlDbType.Integer));
@@ -307,6 +406,43 @@ namespace KashirinDBApi.Controllers
             return success;
         }
 
+
+        private List<int> PreselectTopLevelPosts(
+            NpgsqlConnection conn,
+            long thread_id,
+            long from,
+            long to,
+            bool desc)
+        {
+            List<int> posts = new List<int>();
+            using (var cmd = new NpgsqlCommand())
+            {
+                cmd.Connection = conn;
+                cmd.CommandText = string.Format(
+                    sqlSelectParentPosts,
+                    desc ? 
+                        "desc":
+                        "");
+                cmd.Parameters.Add( 
+                        new NpgsqlParameter("@id", thread_id){ NpgsqlDbType = NpgsqlDbType.Integer }
+                );
+                cmd.Parameters.Add( 
+                        new NpgsqlParameter("@from", from){ NpgsqlDbType = NpgsqlDbType.Integer }
+                );
+                cmd.Parameters.Add( 
+                        new NpgsqlParameter("@to", to){ NpgsqlDbType = NpgsqlDbType.Integer }
+                );
+
+                using(var reader = cmd.ExecuteReader())
+                {
+                    while(reader.Read())
+                    {
+                        posts.Add(reader.GetInt32(0));
+                    }
+                }
+            }
+            return posts;
+        }
 
 
         [Route("api/thread/{slug_or_id}/create")]
@@ -476,7 +612,7 @@ namespace KashirinDBApi.Controllers
                             thread.Message = reader.GetValueOrDefault(4, "");
                             thread.Slug = reader.GetValueOrDefault(5, "");
                             thread.Title = reader.GetValueOrDefault(6, "");
-                            thread.Votes = reader.GetValueOrDefault(7, 0);
+                            thread.Votes = reader.GetValueOrDefault(7, 0L);
                             Response.StatusCode = 200;
                         }
                         else
@@ -499,25 +635,220 @@ namespace KashirinDBApi.Controllers
             string sort = "flat",
             bool desc = false )
         {
-
-            if(sort == "flat")
+            var postPage = new PostPageDataContract();
+            using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
+                conn.Open();
+                long? thread_id, forum_id;
+                string forum_slug;
+                PreselectThreadAndForum(
+                    conn, 
+                    slug_or_id,
+                    out thread_id,
+                    out forum_id,
+                    out forum_slug);
+                if(!forum_id.HasValue 
+                    || !thread_id.HasValue)
+                {
+                    Response.StatusCode = 404;
+                    return new JsonResult(string.Empty);
+                }
 
-            }
-            else if(sort == "tree")
-            {
 
-            }
-            else if(sort == "parent_tree")
-            {
+                using (var cmd = new NpgsqlCommand())
+                {
+                    cmd.Connection = conn;
+                    if(sort == "flat")
+                    {
+                        int from = -1;
+                        int to = Int32.MaxValue;
+                        // Если был передан корректный маркер, 
+                        // то он заполнится в трай парс
+                        // иначе поставится 1
+                        if(marker == null 
+                            || !Int32.TryParse(marker, out from)
+                            ||  from <= 0)
+                        {
+                            from = 1;
+                        }
+                        if(limit.HasValue)
+                        {
+                            to = from + limit.Value;
+                        }
 
-            }
-            else
-            {
-                Response.StatusCode = 400;
+                        cmd.CommandText = string.Format(
+                                sqlSelectPostsFlat,
+                                desc ? 
+                                    "desc":
+                                    ""
+                            );
+                        cmd.Parameters.Add( new NpgsqlParameter("@id", thread_id) );
+                        cmd.Parameters.Add( new NpgsqlParameter("@from", from));
+                        cmd.Parameters.Add( new NpgsqlParameter("@to", to));
+                        
+                        
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            postPage.Posts = new List<PostDetailsDataContract>();
+                            int? lastRN = null; 
+                            while(reader.Read())
+                            {
+                                postPage.Posts.Add(
+                                    new PostDetailsDataContract()
+                                    {
+                                        ID = reader.GetInt32(0),
+                                        Author = reader.GetString(1),
+                                        Created = reader
+                                                    .GetTimeStamp(2)
+                                                    .DateTime
+                                                    .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
+                                        Forum = forum_slug,
+                                        IsEdited = reader.GetBoolean(3),
+                                        Message = reader.GetValueOrDefault(4, ""),
+                                        Parent = reader.GetValueOrDefault(5, 0),
+                                        Thread = thread_id.Value
+                                    }
+                                );
+                                lastRN = reader.GetInt32(6);
+                            }
+                            postPage.Marker = lastRN != null ?
+                                                (lastRN.Value + 1).ToString():
+                                                marker;
+                        }
+                    }
+                    else if(sort == "tree")
+                    {
+                        int from = -1;
+                        int to = Int32.MaxValue;
+                        // Если был передан корректный маркер, 
+                        // то он заполнится в трай парс
+                        // иначе поставится 1
+                        if(marker == null 
+                            || !Int32.TryParse(marker, out from)
+                            ||  from <= 0)
+                        {
+                            from = 1;
+                        }
+                        if(limit.HasValue)
+                        {
+                            to = from + limit.Value;
+                        }
+
+
+                        cmd.CommandText = string.Format(
+                                sqlSelectPosts,
+                                desc ? 
+                                    "desc":
+                                    "",
+                                "{}"
+                            );
+                        cmd.Parameters.Add( new NpgsqlParameter("@id", thread_id) );
+                        cmd.Parameters.Add( new NpgsqlParameter("@from", from));
+                        cmd.Parameters.Add( new NpgsqlParameter("@to", to));
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            postPage.Posts = new List<PostDetailsDataContract>();
+                            int? lastRN = null; 
+                            while(reader.Read())
+                            {
+                                postPage.Posts.Add(
+                                    new PostDetailsDataContract()
+                                    {
+                                        ID = reader.GetInt32(0),
+                                        Author = reader.GetString(1),
+                                        Created = reader
+                                                    .GetTimeStamp(2)
+                                                    .DateTime
+                                                    .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
+                                        Forum = forum_slug,
+                                        IsEdited = reader.GetBoolean(3),
+                                        Message = reader.GetValueOrDefault(4, ""),
+                                        Parent = reader.GetValueOrDefault(5, 0),
+                                        Thread = thread_id.Value
+                                    }
+                                );
+                                lastRN = reader.GetInt32(6);
+                            }
+                            postPage.Marker = lastRN != null ?
+                                                (lastRN.Value + 1).ToString():
+                                                marker;
+                        } 
+                    }
+                    // Лютейший костыль
+                    else if(sort == "parent_tree")
+                    {
+                        int from = -1;
+                        int to = Int32.MaxValue;
+                        // Если был передан корректный маркер, 
+                        // то он заполнится в трай парс
+                        // иначе поставится 1
+                        if(marker == null 
+                            || !Int32.TryParse(marker, out from)
+                            ||  from <= 0)
+                        {
+                            from = 1;
+                        }
+                        if(limit.HasValue)
+                        {
+                            to = from + limit.Value;
+                        }
+
+                        var parents = PreselectTopLevelPosts(conn, thread_id.Value, from, to, desc);
+
+                        if( parents.Count != 0)
+                        {
+                            cmd.CommandText = string.Format(
+                                    sqlSelectPostsByParentID,
+                                    desc ? 
+                                        "desc":
+                                        "",
+                                    "{}",
+                                    string.Join(",", parents.Select(p => p.ToString()))
+                                );
+
+                            using (var reader = cmd.ExecuteReader())
+                            {
+                                postPage.Posts = new List<PostDetailsDataContract>();
+                                while(reader.Read())
+                                {
+
+                                    postPage.Posts.Add(
+                                        new PostDetailsDataContract()
+                                        {
+                                            ID = reader.GetInt32(0),
+                                            Author = reader.GetString(1),
+                                            Created = reader
+                                                        .GetTimeStamp(2)
+                                                        .DateTime
+                                                        .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
+                                            Forum = forum_slug,
+                                            IsEdited = reader.GetBoolean(3),
+                                            Message = reader.GetValueOrDefault(4, ""),
+                                            Parent = reader.GetValueOrDefault(5, 0),
+                                            Thread = thread_id.Value
+                                        }
+                                    );
+                                    
+                                }
+                                postPage.Marker = (from + parents.Count).ToString();
+                            } 
+                        }
+                        else
+                        {
+                            postPage.Posts = new List<PostDetailsDataContract>();
+                            postPage.Marker = from.ToString();
+                        }
+
+                    }
+                    else
+                    {
+                        Response.StatusCode = 400;
+                    }
+                }
             }
 
-            return new JsonResult( "" );
+            return new JsonResult( postPage );
         }
         
         [Route("api/thread/{slug_or_id}/vote")]
@@ -541,7 +872,7 @@ namespace KashirinDBApi.Controllers
                             sqlInsertVote,
                             (isID = long.TryParse(slug_or_id, out id)) ?
                                 "@thread_id":
-                                "(select ID from thread where slug = @thread_slug)"
+                                "(select ID from thread where lower(slug) = lower(@thread_slug))"
                         );
                     cmd.Parameters.Add(
                             isID ?

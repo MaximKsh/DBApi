@@ -7,13 +7,13 @@ namespace KashirinDBApi.Controllers.DataContracts
     [DataContract]
     public class PostFullDataContract 
     {
-        [DataMember(Name = "user")]
+        [DataMember(Name = "user", EmitDefaultValue = false)]
         public UserProfileDataContract User { get; set; }
-        [DataMember(Name = "forum")]
+        [DataMember(Name = "forum", EmitDefaultValue = false)]
         public ForumDetailsDataContract Forum { get; set; }
-        [DataMember(Name = "post")]
+        [DataMember(Name = "post", EmitDefaultValue = false)]
         public PostDetailsDataContract Post { get; set; }
-        [DataMember(Name = "thread")]
+        [DataMember(Name = "thread", EmitDefaultValue = false)]
         public ThreadDetailsDataContract Thread { get; set; }
     }
 

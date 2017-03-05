@@ -53,7 +53,7 @@ namespace KashirinDBApi.Controllers
                 u.nickname as post_author,
                 p.created as post_created,
                 f.slug as post_forum,
-                u.id as post_id,
+                p.id as post_id,
                 p.isedited as post_isedited,
                 p.message as post_message,
                 p.parent_id as post_parent,
@@ -134,7 +134,10 @@ namespace KashirinDBApi.Controllers
                             postDetails = new PostDetailsDataContract();
                             postDetails.ID = reader.GetInt32(0);
                             postDetails.Author = reader.GetString(1);
-                            postDetails.Created = reader.GetDateTime(2).ToString();
+                            postDetails.Created = reader
+                                            .GetTimeStamp(2)
+                                            .DateTime
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
                             postDetails.Forum = reader.GetValueOrDefault(3, "");
                             postDetails.IsEdited = reader.GetBoolean(4);
                             postDetails.Message = reader.GetValueOrDefault(5, "");
@@ -190,7 +193,10 @@ namespace KashirinDBApi.Controllers
                         {
                             postFull.Post = new PostDetailsDataContract();
                             postFull.Post.Author = reader.GetValueOrDefault("post_author", "");
-                            postFull.Post.Created = reader.GetDateTime(reader.GetOrdinal("post_created")).ToString();
+                            postFull.Post.Created = reader
+                                                .GetTimeStamp(reader.GetOrdinal("post_created"))
+                                                .DateTime
+                                                .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
                             postFull.Post.Forum = reader.GetValueOrDefault("post_forum", "");
                             postFull.Post.ID = reader.GetInt32(reader.GetOrdinal("post_id"));
                             postFull.Post.IsEdited = reader.GetBoolean(reader.GetOrdinal("post_isedited"));   
@@ -221,7 +227,10 @@ namespace KashirinDBApi.Controllers
                             {
                                 postFull.Thread = new ThreadDetailsDataContract();
                                 postFull.Thread.Author = reader.GetValueOrDefault("thread_author", ""); 
-                                postFull.Thread.Created = reader.GetDateTime(reader.GetOrdinal("thread_created")).ToString();
+                                postFull.Thread.Created = reader
+                                                .GetTimeStamp(reader.GetOrdinal("thread_created"))
+                                                .DateTime
+                                                .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
                                 postFull.Thread.Forum = reader.GetValueOrDefault("thread_forum", "");
                                 postFull.Thread.ID = reader.GetInt32(reader.GetOrdinal("thread_id"));
                                 postFull.Thread.Message = reader.GetValueOrDefault("thread_message", "");
