@@ -1,13 +1,13 @@
 CREATE TABLE public."user"
 (
     ID SERIAL PRIMARY KEY NOT NULL,
-    about VARCHAR(1000),
+    about TEXT,
     email VARCHAR(255),
     fullname VARCHAR(300),
     nickname VARCHAR(100) NOT NULL
 );
-CREATE UNIQUE INDEX user_email_uindex ON public."user" (email);
-CREATE UNIQUE INDEX user_nickname_uindex ON public."user" (nickname);
+CREATE UNIQUE INDEX user_email_uindex ON public."user" (lower(email));
+CREATE UNIQUE INDEX user_nickname_uindex ON public."user" (lower(nickname));
 
 CREATE TABLE public.forum
 (
@@ -25,14 +25,14 @@ CREATE TABLE public.thread
     author_ID INT NOT NULL,
     created TIMESTAMP DEFAULT now(),
     forum_ID INT NOT NULL,
-    message VARCHAR(1000),
+    message TEXT,
     slug VARCHAR(300),
     title VARCHAR(300),
     votes INT,
     CONSTRAINT thread_user_id_fk FOREIGN KEY (author_ID) REFERENCES "user" (id),
     CONSTRAINT thread_forum_id_fk FOREIGN KEY (forum_ID) REFERENCES forum (id)
 );
-CREATE UNIQUE INDEX "thread_slug_uindex" ON public.thread (slug);
+CREATE UNIQUE INDEX "thread_slug_uindex" ON public.thread (lower(slug));
 
 CREATE TABLE public.post
 (
@@ -41,7 +41,7 @@ CREATE TABLE public.post
     created TIMESTAMP DEFAULT now() NOT NULL,
     forum_ID INT NOT NULL,
     isEdited BOOLEAN DEFAULT FALSE ,
-    message VARCHAR(1000),
+    message TEXT,
     parent_ID INT DEFAULT 0 NOT NULL,
     thread_ID INT NOT NULL,
     CONSTRAINT post_user_id_fk FOREIGN KEY (author_ID) REFERENCES "user" (id),

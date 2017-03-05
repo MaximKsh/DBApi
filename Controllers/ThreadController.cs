@@ -289,7 +289,10 @@ namespace KashirinDBApi.Controllers
                         var createdPost = new PostDetailsDataContract();
                         createdPost.ID = reader.GetInt32(0);
                         createdPost.Author = post.Author;
-                        createdPost.Created = reader.GetDateTime(2).ToString();
+                        createdPost.Created = reader
+                                        .GetTimeStamp(2)
+                                        .DateTime
+                                        .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
                         createdPost.Thread = thread_id;
                         createdPost.Forum = forumSlug;
                         createdPost.IsEdited = reader.GetBoolean(4);
@@ -397,7 +400,7 @@ namespace KashirinDBApi.Controllers
                             updateFields,
                             (isID = long.TryParse(slug_or_id, out id)) ?
                                 "id = @id":
-                                "slug = @slug"
+                                "lower(slug) = lower(@slug)"
                         );
                     cmd.Parameters.Add(
                             isID ?
@@ -410,7 +413,10 @@ namespace KashirinDBApi.Controllers
                         if(reader.Read())
                         {
                             updatedThread.Author = reader.GetValueOrDefault(0, "");
-                            updatedThread.Created = reader.GetTimeStamp(1).DateTime.ToString();
+                            updatedThread.Created = reader
+                                            .GetTimeStamp(1)
+                                            .DateTime
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
                             updatedThread.Forum = reader.GetValueOrDefault(2, "");
                             updatedThread.ID = reader.GetInt32(3);
                             updatedThread.Message = reader.GetValueOrDefault(4, "");
@@ -448,7 +454,7 @@ namespace KashirinDBApi.Controllers
                             sqlSelectThreadDetails,
                             (isID = long.TryParse(slug_or_id, out id)) ?
                                 "t.id = @id":
-                                "t.slug = @slug"
+                                "lower(t.slug) = lower(@slug)"
                         );
                     cmd.Parameters.Add(
                             isID ?
@@ -461,7 +467,10 @@ namespace KashirinDBApi.Controllers
                         if(reader.Read())
                         {
                             thread.Author = reader.GetValueOrDefault(0, "");
-                            thread.Created = reader.GetTimeStamp(1).DateTime.ToString();
+                            thread.Created = reader
+                                            .GetTimeStamp(1)
+                                            .DateTime
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
                             thread.Forum = reader.GetValueOrDefault(2, "");
                             thread.ID = reader.GetInt32(3);
                             thread.Message = reader.GetValueOrDefault(4, "");
@@ -547,7 +556,10 @@ namespace KashirinDBApi.Controllers
                         if(reader.Read())
                         {
                             updatedThread.Author = reader.GetValueOrDefault(0, "");
-                            updatedThread.Created = reader.GetTimeStamp(1).DateTime.ToString();
+                            updatedThread.Created = reader
+                                            .GetTimeStamp(1)
+                                            .DateTime
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
                             updatedThread.Forum = reader.GetValueOrDefault(2, "");
                             updatedThread.ID = reader.GetInt32(3);
                             updatedThread.Message = reader.GetValueOrDefault(4, "");

@@ -14,15 +14,15 @@ namespace KashirinDBApi.Controllers.DataContracts
         public string Created { get; set; }
         [DataMember(Name = "forum")]
         public string Forum { get; set; }
-        [DataMember(Name = "id")]
+        [DataMember(Name = "id", EmitDefaultValue = false)]
         public long ID { get; set; }
         [DataMember(Name = "message")]
         public string Message { get; set; }
-        [DataMember(Name = "slug")]
+        [DataMember(Name = "slug", EmitDefaultValue = false)]
         public string Slug { get; set; }
         [DataMember(Name = "title")]
         public string Title { get; set; }
-        [DataMember(Name = "votes")]
+        [DataMember(Name = "votes", EmitDefaultValue = false)]
         public long Votes { get; set; }
     }
 

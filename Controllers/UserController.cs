@@ -34,7 +34,7 @@ namespace KashirinDBApi.Controllers
             union all
             select 'selected' AS status, u.id, u.about, u.email, u.fullname, u.nickname
             from   tuple t
-            inner join ""user"" u on u.email = t.email or u.nickname = t.nickname ;
+            inner join ""user"" u on lower(u.email) = lower(t.email) or lower(u.nickname) = lower(t.nickname);
         ";
 
         private static readonly string sqlSelectProfile = @"
@@ -45,7 +45,7 @@ namespace KashirinDBApi.Controllers
                 nickname
             from ""user""
             where 
-                nickname = @name
+                lower(nickname) = lower(@name)
             ;
         ";
 
@@ -56,7 +56,7 @@ namespace KashirinDBApi.Controllers
                 {0}
                 id = id
             where
-                nickname = @nickname
+                lower(nickname) = lower(@nickname)
             returning about, email, fullname, nickname, 'updated'
             ;
         ";
@@ -67,8 +67,8 @@ namespace KashirinDBApi.Controllers
                         ID
                     from ""user""
                     where
-                        email = @email
-                        and nickname <> @nickname
+                        lower(email) = lower(@email)
+                        and lower(nickname) <> lower(@nickname)
                 ),
                 upd as (
                     update
@@ -82,7 +82,7 @@ namespace KashirinDBApi.Controllers
                         {0}
                         id = id
                     where
-                        nickname = @nickname
+                        lower(nickname) = lower(@nickname)
                     RETURNING about, email, fullname, nickname
                 )
             select
