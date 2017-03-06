@@ -5,6 +5,7 @@ using KashirinDBApi.Controllers.Extensions;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
 using NpgsqlTypes;
+using KashirinDBApi.Controllers.Helpers;
 
 namespace KashirinDBApi.Controllers
 {
@@ -18,8 +19,11 @@ namespace KashirinDBApi.Controllers
                 update
                     post
                 set
-                    message = @message,
-                    isedited = true
+                    isedited =  case when message = @message
+                        then isedited
+                        else true
+                    end,
+                    message = @message
                 where
                     id = @id
                 returning id, author_id, created, forum_id, isedited, message, parent_id, thread_id
@@ -84,7 +88,7 @@ namespace KashirinDBApi.Controllers
         ";
 
         private static readonly string sqlThreadFields = @"
-                (select nickname from ""user"" where id = f.user_id) as thread_author,
+                (select nickname from ""user"" where id = t.author_id) as thread_author,
                 t.created as thread_created,
                 f.slug as thread_forum,
                 t.id as thread_id,
@@ -116,38 +120,83 @@ namespace KashirinDBApi.Controllers
         {
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(PostUpdateDataContract));
             var postUpdate = (PostUpdateDataContract)js.ReadObject(Request.Body);
+            
+
             PostDetailsDataContract postDetails = null;
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
                 conn.Open();
-                using (var cmd = new NpgsqlCommand())
+                if(postUpdate.Message != null)
                 {
-                    cmd.Connection = conn;
-                    cmd.CommandText = sqlUpdatePost;
-                    cmd.Parameters.Add(new NpgsqlParameter("@id", id){ NpgsqlDbType = NpgsqlDbType.Integer });
-                    cmd.Parameters.Add(new NpgsqlParameter("@message", postUpdate.Message));
-
-                    using(var reader = cmd.ExecuteReader())
+                    using (var cmd = new NpgsqlCommand())
                     {
-                        if(reader.Read())
+                        cmd.Connection = conn;
+                        cmd.CommandText = sqlUpdatePost;
+                        cmd.Parameters.Add(new NpgsqlParameter("@id", id){ NpgsqlDbType = NpgsqlDbType.Integer });
+                        cmd.Parameters.Add(new NpgsqlParameter("@message", postUpdate.Message));
+
+                        using(var reader = cmd.ExecuteReader())
                         {
-                            postDetails = new PostDetailsDataContract();
-                            postDetails.ID = reader.GetInt32(0);
-                            postDetails.Author = reader.GetString(1);
-                            postDetails.Created = reader
-                                            .GetTimeStamp(2)
-                                            .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
-                            postDetails.Forum = reader.GetValueOrDefault(3, "");
-                            postDetails.IsEdited = reader.GetBoolean(4);
-                            postDetails.Message = reader.GetValueOrDefault(5, "");
-                            postDetails.Parent = reader.GetValueOrDefault(6, 0);
-                            postDetails.Thread = reader.GetInt32(7);
-                            Response.StatusCode = 200;
+                            if(reader.Read())
+                            {
+                                postDetails = new PostDetailsDataContract();
+                                postDetails.ID = reader.GetInt32(0);
+                                postDetails.Author = reader.GetString(1);
+                                postDetails.Created = reader
+                                                .GetTimeStamp(2)
+                                                .DateTime
+                                                .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                                postDetails.Forum = reader.GetValueOrDefault(3, "");
+                                postDetails.IsEdited = reader.GetBoolean(4);
+                                postDetails.Message = reader.GetValueOrDefault(5, "");
+                                postDetails.Parent = reader.GetValueOrDefault(6, 0);
+                                postDetails.Thread = reader.GetInt32(7);
+                                Response.StatusCode = 200;
+                            }
+                            else
+                            {
+                                Response.StatusCode = 404;
+                            }
                         }
-                        else
+                    }
+                }
+                else
+                {
+                    using (var cmd = new NpgsqlCommand())
+                    {
+                        cmd.Connection = conn;
+                        cmd.CommandText = string.Format(
+                            sqlSelectPost,
+                                "",
+                                "", 
+                                "", 
+                                ""
+                            );
+                        cmd.Parameters.Add(new NpgsqlParameter("@id", id){ NpgsqlDbType = NpgsqlDbType.Integer });
+
+                        using(var reader = cmd.ExecuteReader())
                         {
-                            Response.StatusCode = 404;
+                            if(reader.Read())
+                            {
+                                postDetails = new PostDetailsDataContract();
+                                postDetails.Author = reader.GetValueOrDefault("post_author", "");
+                                postDetails.Created = reader
+                                                    .GetTimeStamp(reader.GetOrdinal("post_created"))
+                                                    .DateTime
+                                                    .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                                postDetails.Forum = reader.GetValueOrDefault("post_forum", "");
+                                postDetails.ID = reader.GetInt32(reader.GetOrdinal("post_id"));
+                                postDetails.IsEdited = reader.GetBoolean(reader.GetOrdinal("post_isedited"));   
+                                postDetails.Message = reader.GetValueOrDefault("post_message", "");
+                                postDetails.Parent = reader.GetValueOrDefault("post_parent", 0);
+                                postDetails.Thread = reader.GetInt32(reader.GetOrdinal("post_thread_id"));
+
+                                Response.StatusCode = 200;
+                            }
+                            else
+                            {
+                                Response.StatusCode = 404;
+                            }
                         }
                     }
                 }
@@ -216,7 +265,7 @@ namespace KashirinDBApi.Controllers
                             if(relateForum)
                             {
                                 postFull.Forum = new ForumDetailsDataContract();
-                                postFull.Forum.Posts = reader.GetInt64(reader.GetOrdinal("forum_posts"));
+                                // postFull.Forum.Posts = reader.GetInt64(reader.GetOrdinal("forum_posts"));
                                 postFull.Forum.Slug = reader.GetValueOrDefault("forum_slug", "");
                                 postFull.Forum.Threads = reader.GetInt64(reader.GetOrdinal("forum_threads"));
                                 postFull.Forum.Title = reader.GetValueOrDefault("forum_title", ""); 

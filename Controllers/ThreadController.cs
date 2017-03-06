@@ -27,6 +27,14 @@ namespace KashirinDBApi.Controllers
             ;
         ";
 
+        private static readonly string sqlPreselectAuthorID = @"
+            select ID
+            from ""user""
+            where nickname = @nickname
+            limit 1;
+        ";
+
+
         private static readonly string sqlInsertPost = @"
             insert into post(author_id, created, forum_id, message, parent_id, thread_id)
                 (
@@ -35,23 +43,18 @@ namespace KashirinDBApi.Controllers
                     from
                     (
                         select
-                            (
-                                select ID
-                                from ""user""
-                                where nickname = @nickname
-                                limit 1
-                            ) AS author_id,
-                        case when @created is null
-                            then now()
-                            else @created
-                        end as created,
-                        @forum_id AS forum_id,
-                        @message AS message,
-                        case when @parent_id=0
-                            then 0
-                            else (select ID from post where ID = @parent_id limit 1)
-                        end  as parent_id,
-                        @thread_id as thread_id
+                            @author_id AS author_id,
+                            case when @created is null
+                                then now()
+                                else @created
+                            end as created,
+                            @forum_id AS forum_id,
+                            @message AS message,
+                            case when @parent_id=0
+                                then 0
+                                else (select ID from post where ID = @parent_id and thread_id = @thread_id limit 1)
+                            end  as parent_id,
+                            @thread_id as thread_id
                     ) t
                     where t.author_id is not null
                             and t.parent_id is not null
@@ -361,9 +364,36 @@ namespace KashirinDBApi.Controllers
             }
         }
 
+        private bool PreselectAuthorID(
+            NpgsqlConnection conn,
+            string nickname,
+            out long authorID)
+        {
+            using (var cmd = new NpgsqlCommand())
+            {
+                cmd.Connection = conn;
+                cmd.CommandText = sqlPreselectAuthorID;
+                cmd.Parameters.Add(new NpgsqlParameter("@nickname", nickname));
+
+                using(var reader = cmd.ExecuteReader())
+                {
+                    if(reader.Read())
+                    {
+                        authorID = reader.GetInt32(0);
+                    }
+                    else
+                    {
+                        authorID = -1;
+                    }
+                }
+            }
+            return authorID != -1;
+        }
+
         private bool InsertPost(
             NpgsqlConnection conn,
             PostDetailsDataContract post,
+            long author_id,
             long thread_id,
             long forum_id,
             string forumSlug,
@@ -374,7 +404,7 @@ namespace KashirinDBApi.Controllers
             {
                 cmd.Connection = conn;
                 cmd.CommandText = sqlInsertPost;
-                cmd.Parameters.Add(Helper.NewNullableParameter("@nickname", post.Author));
+                cmd.Parameters.Add(Helper.NewNullableParameter("@author_id", author_id, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@created", post.Created, NpgsqlDbType.Timestamp));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_id", forum_id, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@thread_id", thread_id, NpgsqlDbType.Integer));
@@ -471,26 +501,33 @@ namespace KashirinDBApi.Controllers
                     var transaction = conn.BeginTransaction();
                     foreach(var post in posts)
                     {
-                        var success = InsertPost(conn, 
+                        long authorID;
+                        if(!PreselectAuthorID(conn, post.Author, out authorID))
+                        {
+                            Response.StatusCode = 404;
+                            break;
+                        }
+
+                        if(!InsertPost(conn, 
                             post,
+                            authorID,
                             threadID.Value,
                             forumID.Value,
                             forumSlug,
-                            createdPosts);
-                        if(!success)
+                            createdPosts))
                         {
+                            Response.StatusCode = 409;
                             break;
                         }
                     }
                     if(posts.Count == createdPosts.Count)
                     {
-                        transaction.Commit();
                         Response.StatusCode = 201;
+                        transaction.Commit();
                     }
                     else
                     {
                         transaction.Rollback();
-                        Response.StatusCode = 409;
                     }
                 }
                 else
@@ -871,7 +908,7 @@ namespace KashirinDBApi.Controllers
                     cmd.CommandText = string.Format(
                             sqlInsertVote,
                             (isID = long.TryParse(slug_or_id, out id)) ?
-                                "@thread_id":
+                                "(select ID from thread where ID = @thread_id)":
                                 "(select ID from thread where lower(slug) = lower(@thread_slug))"
                         );
                     cmd.Parameters.Add(

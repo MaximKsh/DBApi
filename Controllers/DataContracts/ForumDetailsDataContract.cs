@@ -8,7 +8,7 @@ namespace KashirinDBApi.Controllers.DataContracts
     [DataContract]
     public class ForumDetailsDataContract 
     {
-        [DataMember(Name = "posts")]
+        [DataMember(Name = "posts",  EmitDefaultValue = false)]
         public long Posts { get; set; }
         [DataMember(Name = "slug")]
         public string Slug { get; set; }
