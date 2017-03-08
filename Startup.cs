@@ -37,7 +37,8 @@ namespace KashirinDBApi
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
-            loggerFactory.AddConsole(Configuration.GetSection("Logging"));
+            //loggerFactory.AddConsole(Configuration.GetSection("Logging"));
+            loggerFactory.AddConsole();
             loggerFactory.AddDebug();
 
             if (env.IsDevelopment())
@@ -48,7 +49,7 @@ namespace KashirinDBApi
             }
             else
             {
-                app.UseExceptionHandler("/Home/Error");
+                app.UseExceptionHandler("/api/service/error");
             }
 
             // app.UseStaticFiles();

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using KashirinDBApi.Controllers.DataContracts;
 using Npgsql;
 using Microsoft.Extensions.Configuration;
+using System;
 
 namespace KashirinDBApi.Controllers
 {
@@ -35,6 +36,19 @@ namespace KashirinDBApi.Controllers
         }
         #endregion
 
+        [Route("api/service/ping")]
+        [HttpGet]
+        public string Ping()
+        {
+            return "I am working";
+        }
+        [Route("api/service/error")]
+        [HttpGet]
+        public string Error()
+        {
+            return "Some error occured";
+        }
+
         [Route("api/service/clear")]
         [HttpPost]
         public void Clear()
@@ -63,7 +77,6 @@ namespace KashirinDBApi.Controllers
                 Thread = 0,
                 User = 0
             };
-            
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
                 conn.Open();

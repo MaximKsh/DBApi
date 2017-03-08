@@ -1,4 +1,5 @@
-CREATE TABLE public."user"
+
+CREATE TABLE "user"
 (
     ID SERIAL PRIMARY KEY NOT NULL,
     about TEXT,
@@ -9,7 +10,7 @@ CREATE TABLE public."user"
 CREATE UNIQUE INDEX user_email_uindex ON public."user" (lower(email));
 CREATE UNIQUE INDEX user_nickname_uindex ON public."user" (lower(nickname));
 
-CREATE TABLE public.forum
+CREATE TABLE forum
 (
     ID SERIAL PRIMARY KEY NOT NULL,
     slug VARCHAR(300) NOT NULL,
@@ -19,7 +20,7 @@ CREATE TABLE public.forum
 );
 CREATE UNIQUE INDEX "forum_user_ID_uindex" ON public.forum (user_ID);
 
-CREATE TABLE public.thread
+CREATE TABLE thread
 (
     ID SERIAL PRIMARY KEY NOT NULL,
     author_ID INT NOT NULL,
@@ -34,7 +35,7 @@ CREATE TABLE public.thread
 );
 CREATE UNIQUE INDEX "thread_slug_uindex" ON public.thread (lower(slug));
 
-CREATE TABLE public.post
+CREATE TABLE post
 (
     ID SERIAL PRIMARY KEY NOT NULL,
     author_ID INT NOT NULL,
@@ -51,7 +52,7 @@ CREATE TABLE public.post
 
 
 
-CREATE TABLE public.vote
+CREATE TABLE vote
 (
     id SERIAL PRIMARY KEY NOT NULL,
     thread_id INT NOT NULL,
