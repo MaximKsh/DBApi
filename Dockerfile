@@ -28,7 +28,7 @@ RUN apt-get -y install dotnet-dev-1.0.1
 
 # Копируем исходный код в Docker-контейнер
 ADD ./ $WORK/
-
+RUN cp $WORK/appsettings.json.docker $WORK/appsettings.json
 #
 # Установка postgresql
 #
