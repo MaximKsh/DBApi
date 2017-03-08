@@ -128,6 +128,9 @@ namespace KashirinDBApi.Controllers
                 @from <= rn and rn < @to
         ;";
 
+        // Чтобы прикрутить сортировку на одном уровне по дате
+        // Вместо order by full_path
+        // Нужно order by true_path , parent_id , created
         private static readonly string sqlSelectPosts = @"
             select *
             from 
@@ -136,7 +139,6 @@ namespace KashirinDBApi.Controllers
                     recursetree (
                                 id,
                                 full_path,
-                                path,
                                 author_id,
                                 created,
                                 forum_id,
@@ -148,7 +150,6 @@ namespace KashirinDBApi.Controllers
                     select
                         id,
                         array_append('{1}' :: INT [], id),
-                        '{1}' :: INT [],
                         author_id,
                         created,
                         forum_id,
@@ -164,7 +165,6 @@ namespace KashirinDBApi.Controllers
                     select
                         p2.id,
                         array_append(full_path, p2.id),
-                        array_append(path, p2.id),
                         p2.author_id,
                         p2.created,
                         p2.forum_id,
@@ -183,36 +183,42 @@ namespace KashirinDBApi.Controllers
                     isedited,
                     message,
                     parent_id,
+                    case when array_length(full_path, 1) = 1
+                        then full_path
+                        else array_remove(full_path, full_path[array_length(full_path, 1)])
+                    end as true_path,
                     row_number() over (order by full_path {0}) as rn
                 from recursetree p 
                 inner join ""user"" u on author_id = u.id    
-                order by full_path {0}
+                order by full_path {0} 
             ) t
             where 
                 @from <= rn and rn < @to
         ";
 
+        // И снова, нужно будет нормально, то сортируем по created
         private static readonly string sqlSelectParentPosts = @"
             select *
             from
             (
                 select
                     id,
-                    row_number() over (order by created {0}) as rn
+                    row_number() over (order by id {0}) as rn
                 from post
                 where
                     parent_id = 0
                     and thread_id = @id
+                order by id {0}
             )t
             where @from <= rn and rn < @to
         ";
 
+        // Для сортировки вместе с датой order by true_path {0}, created {0}
         private static readonly string sqlSelectPostsByParentID = @"
                 with recursive
                     recursetree (
                                 id,
                                 full_path,
-                                path,
                                 author_id,
                                 created,
                                 forum_id,
@@ -224,7 +230,6 @@ namespace KashirinDBApi.Controllers
                     select
                         id,
                         array_append('{1}' :: INT [], id),
-                        '{1}' :: INT [],
                         author_id,
                         created,
                         forum_id,
@@ -239,7 +244,6 @@ namespace KashirinDBApi.Controllers
                     select
                         p2.id,
                         array_append(full_path, p2.id),
-                        array_append(path, p2.id),
                         p2.author_id,
                         p2.created,
                         p2.forum_id,
@@ -256,7 +260,12 @@ namespace KashirinDBApi.Controllers
                     created,
                     isedited,
                     message,
-                    parent_id
+                    parent_id,
+                    case when array_length(full_path, 1) = 1
+                        then full_path
+                        else array_remove(full_path, full_path[array_length(full_path, 1)])
+                    end
+                    as true_path
                 from recursetree p 
                 inner join ""user"" u on author_id = u.id    
                 order by full_path {0}
@@ -805,14 +814,13 @@ namespace KashirinDBApi.Controllers
                                         Thread = thread_id.Value
                                     }
                                 );
-                                lastRN = reader.GetInt32(6);
+                                lastRN = reader.GetInt32(7);
                             }
                             postPage.Marker = lastRN != null ?
                                                 (lastRN.Value + 1).ToString():
                                                 marker;
                         } 
                     }
-                    // Лютейший костыль
                     else if(sort == "parent_tree")
                     {
                         int from = -1;

@@ -265,7 +265,7 @@ namespace KashirinDBApi.Controllers
                             if(relateForum)
                             {
                                 postFull.Forum = new ForumDetailsDataContract();
-                                // postFull.Forum.Posts = reader.GetInt64(reader.GetOrdinal("forum_posts"));
+                                postFull.Forum.Posts = reader.GetInt64(reader.GetOrdinal("forum_posts"));
                                 postFull.Forum.Slug = reader.GetValueOrDefault("forum_slug", "");
                                 postFull.Forum.Threads = reader.GetInt64(reader.GetOrdinal("forum_threads"));
                                 postFull.Forum.Title = reader.GetValueOrDefault("forum_title", ""); 

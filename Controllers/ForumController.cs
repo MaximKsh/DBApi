@@ -160,7 +160,7 @@ namespace KashirinDBApi.Controllers
                 u.email,
                 u.fullname,
                 u.nickname,
-                convert_to((u.nickname), 'utf8')
+                convert_to(lower(u.nickname), 'utf8')
             from ""user"" u
             left join thread t on
                             u.ID = t.author_ID
@@ -172,7 +172,7 @@ namespace KashirinDBApi.Controllers
                            
             where (p.ID is not null or t.ID is not null) {0}
             order by 
-                convert_to((u.nickname), 'utf8') {1}
+                convert_to(lower(u.nickname), 'utf8') {1}
             {2}
             ;
         ";
@@ -237,7 +237,6 @@ namespace KashirinDBApi.Controllers
                     
                 }
             }
-            Console.WriteLine(Response.StatusCode);
             return new JsonResult(Response.StatusCode != 404 ? newForum as object : string.Empty) ;
         }
 
@@ -437,7 +436,7 @@ namespace KashirinDBApi.Controllers
                         cmd.Connection = conn;
                         cmd.CommandText = String.Format(
                             sqlSelectForumUsers,
-                            since != null ? $"and convert_to((u.nickname), 'utf8') {(desc ? "<" : ">")} '{since.Replace("'", "''")}'": "",
+                            since != null ? $"and convert_to(lower(u.nickname), 'utf8') {(desc ? "<" : ">")} convert_to(lower('{since.Replace("'", "''")}'), 'utf8')": "",
                             desc ? "desc" : "",
                             limit.HasValue && 0 < limit ? $"limit + {limit.Value}" : ""
                         );
