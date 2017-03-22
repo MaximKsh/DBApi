@@ -24,7 +24,7 @@ CREATE TABLE thread
 (
     ID SERIAL PRIMARY KEY NOT NULL,
     author_ID INT NOT NULL,
-    created TIMESTAMP DEFAULT now(),
+    created TIMESTAMP WITH TIME ZONE DEFAULT now(),
     forum_ID INT NOT NULL,
     message TEXT,
     slug VARCHAR(300),
@@ -39,7 +39,7 @@ CREATE TABLE post
 (
     ID SERIAL PRIMARY KEY NOT NULL,
     author_ID INT NOT NULL,
-    created TIMESTAMP DEFAULT now() NOT NULL,
+    created TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     forum_ID INT NOT NULL,
     isEdited BOOLEAN DEFAULT FALSE ,
     message TEXT,
