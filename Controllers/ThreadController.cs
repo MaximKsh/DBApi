@@ -406,6 +406,7 @@ namespace KashirinDBApi.Controllers
             long thread_id,
             long forum_id,
             string forumSlug,
+            DateTime time,
             List<PostDetailsDataContract> createdPosts)
         {
             bool success = false;
@@ -414,7 +415,7 @@ namespace KashirinDBApi.Controllers
                 cmd.Connection = conn;
                 cmd.CommandText = sqlInsertPost;
                 cmd.Parameters.Add(Helper.NewNullableParameter("@author_id", author_id, NpgsqlDbType.Integer));
-                cmd.Parameters.Add(Helper.NewNullableParameter("@created", post.Created, NpgsqlDbType.Timestamp));
+                cmd.Parameters.Add(Helper.NewNullableParameter("@created", post.Created ?? time.ToString(), NpgsqlDbType.Timestamp));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_id", forum_id, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@thread_id", thread_id, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@parent_id", post.Parent, NpgsqlDbType.Integer));
@@ -508,6 +509,7 @@ namespace KashirinDBApi.Controllers
                     && forumID.HasValue)
                 {
                     var transaction = conn.BeginTransaction();
+                    var currentDate = DateTime.Now;
                     foreach(var post in posts)
                     {
                         long authorID;
@@ -523,6 +525,7 @@ namespace KashirinDBApi.Controllers
                             threadID.Value,
                             forumID.Value,
                             forumSlug,
+                            currentDate,
                             createdPosts))
                         {
                             Response.StatusCode = 409;
