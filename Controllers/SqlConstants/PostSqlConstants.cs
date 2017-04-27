@@ -92,7 +92,7 @@ limit 1;
     t.message as thread_message,
     t.slug as thread_slug,
     t.title as thread_title,
-    (select coalesce(sum(vote), 0) from vote where thread_id = t.id) as thread_votes,
+    t.votes as thread_votes,
         ";
 
         public static readonly string SqlUserJoin = @"

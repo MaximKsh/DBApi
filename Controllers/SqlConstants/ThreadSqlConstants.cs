@@ -90,7 +90,7 @@ select
     t.message,
     t.slug,
     t.title,
-    (select sum(vote) from vote where thread_id = t.id) as votes
+    t.votes
 from thread t
 where {0} ;
         ";
@@ -115,7 +115,7 @@ with ins as
                     else message
         end
     where {0}
-    returning author_name, created, forum_slug, id, message, slug, title
+    returning author_name, created, forum_slug, id, message, slug, title, votes
 )
 select
     t.author_name as author,
@@ -125,7 +125,7 @@ select
     t.message,
     t.slug,
     t.title,
-    (select sum(vote) from vote where thread_id = t.id) as votes
+    t.votes
 from ins t
 ;
         ";
@@ -138,29 +138,26 @@ from ins t
 
 
         public static readonly string SqlInsertVote = @"
-with ins as
-(
-    insert into vote(thread_id, user_id, vote)
+insert into vote(thread_id, user_id, vote)
     values (@thread_id, @user_id, @vote)
-    on conflict(thread_id, user_id) do update set
-        vote = @vote
-    returning thread_id
-)
-select
-    t.author_name as author,
-    t.created,
-    t.forum_slug as forum,
-    t.id,
-    t.message,
-    t.slug,
-    t.title,
-    0 as votes
-from thread t
-where
-    t.id = (select thread_id from ins limit 1)
+on conflict(thread_id, user_id) do update set
+    vote = @vote
 ;
-
-select sum(vote) from vote where thread_id = @thread_id;
+update thread
+set
+    votes = (select sum(vote) from vote where thread_id = @thread_id)
+where 
+    id = @thread_id
+returning
+    author_name as author,
+    created,
+    forum_slug as forum,
+    id,
+    message,
+    slug,
+    title,
+    votes
+;
         ";
 
         public static readonly string SqlSelectPostsFlat = @"

@@ -5,27 +5,32 @@ namespace KashirinDBApi.Controllers.SqlConstants
     public static class UserSqlConstants
     {
         public static readonly string SqlInsertUser = @"
-with tuple as 
-(
-    select
-        @about as about,
-        @email as email,
-        @fullname as fullname,
-        @nickname as nickname
-),
-ins as 
+with ins as 
 (
     insert into ""user"" (about, email, fullname, nickname)
-        select about, email, fullname, nickname from tuple
+    values (@about, @email, @fullname, @nickname)
     on conflict do nothing
     returning id, about, email, fullname, nickname
 )
-select 'inserted' AS status, id, about, email, fullname, nickname FROM ins
+select 
+    'inserted' AS status, 
+    id,
+    about, 
+    email, 
+    fullname, 
+    nickname
+from ins
 union all
-select 'selected' AS status, u.id, u.about, u.email, u.fullname, u.nickname
-from   ""user"" u
-where lower(u.email) = (select lower(email) from tuple)
-    or lower(u.nickname) = (select lower(nickname) from tuple)
+select 
+    'selected' AS status, 
+    u.id, 
+    u.about, 
+    u.email, 
+    u.fullname, 
+    u.nickname
+from ""user"" u
+where lower(u.email) = lower(@email)
+    or lower(u.nickname) = lower(@nickname)
         ";
 
         public static readonly string SqlSelectProfile = @"

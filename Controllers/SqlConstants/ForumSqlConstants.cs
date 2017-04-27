@@ -25,7 +25,7 @@ ins as
             title, 
             user_id,
             nickname
-        from tuple where user_id is not null
+        from tuple 
     on conflict do nothing
     returning id, slug, title, user_id, user_name
 )
@@ -74,7 +74,7 @@ ins as
         from tuple 
         where forum_id is not null and author_id is not null
     on conflict do nothing
-    returning id, author_id, author_name, created, forum_id, forum_slug, message, slug, title
+    returning id, author_id, author_name, created, forum_id, forum_slug, message, slug, title, votes
 )
 select
     'inserted' as status,
@@ -85,7 +85,7 @@ select
     message,
     slug,
     title,
-    (select sum(vote) from vote where thread_id = id) as votes
+    votes
 from ins
 union all
 select
@@ -97,7 +97,7 @@ select
     th.message,
     th.slug,
     th.title,
-    (select sum(vote) from vote where thread_id = th.id) as votes
+    th.votes
 FROM thread as th 
 where lower(th.slug) = (select lower(slug) from tuple)
         ";
@@ -123,7 +123,7 @@ from forum
 where lower(slug) = lower(@slug)
 limit 1;
         ";
-        public static readonly string SqlSelectForumThreads = @"
+        private static readonly string SqlSelectForumThreads = @"
 select
     t.author_name,
     t.created,
@@ -132,15 +132,21 @@ select
     t.message,
     t.slug,
     t.title,
-    (select sum(vote) from vote where thread_id = t.id) as votes
+    t.votes
 from thread t
 where
     t.forum_id = @id
-    {0}
+    and (@since is null or created {0} @since)
 order by t.created {1}
-{2} 
+limit @limit
 ;
         ";
+
+        public static readonly string SqlSelectForumThreadsAsc = 
+            string.Format(SqlSelectForumThreads, ">=", "");
+
+        public static readonly string SqlSelectForumThreadsDesc = 
+            string.Format(SqlSelectForumThreads, "<=", "desc");
 
         public static readonly string SqlSelectForumUsers = @"
 select distinct
@@ -152,11 +158,19 @@ select distinct
 from ""user"" u
 left join thread t on u.ID = t.author_ID and t.forum_id = @forum_id
 left join post p on u.ID = p.author_ID and p.forum_id = @forum_id
-where (p.ID is not null or t.ID is not null) {0}
+where 
+    (p.ID is not null or t.ID is not null)
+    and (@since is null or convert_to(lower(u.nickname), 'utf8') {0} convert_to(lower(@since), 'utf8')) 
 order by convert_to(lower(u.nickname), 'utf8') {1}
 limit @limit
 ;
         ";
+
+        public static readonly string SqlSelectForumUsersAsc = 
+            string.Format(SqlSelectForumUsers, ">", "");
+
+        public static readonly string SqlSelectForumUsersDesc = 
+            string.Format(SqlSelectForumUsers, "<", "desc");
         
     }
 

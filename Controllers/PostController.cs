@@ -89,7 +89,7 @@ namespace KashirinDBApi.Controllers
                         postFull.Thread.Message = reader.GetValueOrDefault("thread_message", "");
                         postFull.Thread.Slug = reader.GetValueOrDefault("thread_slug", "");
                         postFull.Thread.Title = reader.GetValueOrDefault("thread_title", "");
-                        postFull.Thread.Votes = reader.GetInt64(reader.GetOrdinal("thread_votes")); 
+                        postFull.Thread.Votes = reader.GetInt32(reader.GetOrdinal("thread_votes")); 
                     }
                 }
             }

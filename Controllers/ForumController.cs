@@ -196,24 +196,16 @@ namespace KashirinDBApi.Controllers
                 }
                 if(preselectedID.HasValue)
                 {
+                    Response.StatusCode = 200;
                     using (var cmd = new NpgsqlCommand())
                     {
                         cmd.Connection = conn;
-                        cmd.CommandText = String.Format(
-                            ForumSqlConstants.SqlSelectForumThreads,
-                            since != null ? $"and created {(desc ? "<=" : ">=")} @since": "",
-                            desc ? "desc" : "",
-                            limit.HasValue && 0 < limit ? $"limit @limit" : ""
-                        );
+                        cmd.CommandText = desc ? 
+                                          ForumSqlConstants.SqlSelectForumThreadsDesc:
+                                          ForumSqlConstants.SqlSelectForumThreadsAsc; 
                         cmd.Parameters.Add(new NpgsqlParameter("@id", preselectedID.Value));
-                        if(since != null)
-                        {
-                            cmd.Parameters.Add(new NpgsqlParameter("@since", since){ NpgsqlDbType = NpgsqlDbType.Timestamp });
-                        }
-                        if(limit.HasValue && 0 < limit)
-                        {
-                            cmd.Parameters.Add(new NpgsqlParameter("@limit", limit));
-                        }
+                        cmd.Parameters.Add(Helper.NewNullableParameter("@since", since, NpgsqlDbType.Timestamp));
+                        cmd.Parameters.Add(new NpgsqlParameter("@limit", limit));
                         
                         using (var reader = cmd.ExecuteReader())
                         {
@@ -234,7 +226,6 @@ namespace KashirinDBApi.Controllers
                                     Votes = reader.GetValueOrDefault(7, 0)
                                 };
                                 threads.Add(thread);
-                                Response.StatusCode = 200;
                             }
                         }
                     }
@@ -269,16 +260,11 @@ namespace KashirinDBApi.Controllers
                     using (var cmd = new NpgsqlCommand())
                     {
                         cmd.Connection = conn;
-                        cmd.CommandText = String.Format(
-                            ForumSqlConstants.SqlSelectForumUsers,
-                            since != null ? $"and convert_to(lower(u.nickname), 'utf8') {(desc ? "<" : ">")} convert_to(lower(@since), 'utf8')": "",
-                            desc ? "desc" : ""
-                        );
+                        cmd.CommandText = desc ?
+                                          ForumSqlConstants.SqlSelectForumUsersDesc:
+                                          ForumSqlConstants.SqlSelectForumUsersAsc;
                         cmd.Parameters.Add(new NpgsqlParameter("@forum_id", forumID.Value));
-                        if(since != null)
-                        {
-                            cmd.Parameters.Add(new NpgsqlParameter("@since", since));
-                        }
+                        cmd.Parameters.Add(Helper.NewNullableParameter("@since", since));
                         cmd.Parameters.Add(new NpgsqlParameter("@limit", limit ?? int.MaxValue));
                         
                         using (var reader = cmd.ExecuteReader())

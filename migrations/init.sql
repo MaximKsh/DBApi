@@ -33,6 +33,7 @@ CREATE TABLE thread
     message TEXT,
     slug VARCHAR(300),
     title VARCHAR(300),
+    votes int default 0,
     CONSTRAINT thread_user_id_fk FOREIGN KEY (author_ID) REFERENCES "user" (id),
     CONSTRAINT thread_forum_id_fk FOREIGN KEY (forum_ID) REFERENCES forum (id)
 );

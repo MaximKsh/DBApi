@@ -11,6 +11,7 @@ using NpgsqlTypes;
 using System.Linq;
 using KashirinDBApi.Controllers.SqlConstants;
 using System.Text;
+using Npgsql.Logging;
 
 namespace KashirinDBApi.Controllers
 {
@@ -305,7 +306,7 @@ namespace KashirinDBApi.Controllers
                             thread.Message = reader.GetValueOrDefault(4, "");
                             thread.Slug = reader.GetValueOrDefault(5, "");
                             thread.Title = reader.GetValueOrDefault(6, "");
-                            thread.Votes = reader.GetValueOrDefault(7, 0L);
+                            thread.Votes = reader.GetValueOrDefault(7, 0);
                             Response.StatusCode = 200;
                         }
                         else
@@ -389,7 +390,7 @@ namespace KashirinDBApi.Controllers
                         cmd.Parameters.Add(new NpgsqlParameter("@thread_id", threadID.Value));
                         cmd.Parameters.Add(new NpgsqlParameter("@user_id", userID.Value));
                         
-                        cmd.Parameters.Add(new NpgsqlParameter("@vote", vote.Voice > 0 ? 1 : -1));
+                        cmd.Parameters.Add(new NpgsqlParameter("@vote", vote.Voice > 0 ? 1 : -1){NpgsqlDbType = NpgsqlDbType.Integer});
 
                         using (var reader = cmd.ExecuteReader())
                         {
@@ -406,11 +407,6 @@ namespace KashirinDBApi.Controllers
                                 updatedThread.Slug = reader.GetValueOrDefault(5, "");
                                 updatedThread.Title = reader.GetValueOrDefault(6, "");
                                 updatedThread.Votes = reader.GetValueOrDefault(7, 0);
-                            }
-                            reader.NextResult();
-                            if(reader.Read())
-                            {
-                                updatedThread.Votes = reader.GetValueOrDefault(0, 0L);
                             }
                         }
                     }
