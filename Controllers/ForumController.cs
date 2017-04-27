@@ -9,185 +9,22 @@ using KashirinDBApi.Controllers.Extensions;
 using KashirinDBApi.Controllers.Helpers;
 using System.Collections.Generic;
 using NpgsqlTypes;
+using KashirinDBApi.Controllers.SqlConstants;
 
 namespace KashirinDBApi.Controllers
 {
     public class ForumController : Controller
     {
-       
-    #region sql
-        
-        private static readonly string sqlGetForumBySlug = @"
-            select
-                ID
-            from forum
-            where lower(slug) = lower(@slug);
-        ";
 
-        private static readonly string sqlInsertForum = @"
-            with
-                tuple as (
-                    select
-                        a.slug,
-                        a.title,
-                        u.id as user_id,
-                        u.nickname nickname
-                    from
-                    (
-                        select
-                            @slug as slug,
-                            @title as title
-                    ) a 
-                    inner join ""user"" u on lower(nickname) = lower(@nickname)
-                ),
-                ins as (
-                    insert into forum (slug, title, user_id)
-                        select slug, title, user_id from tuple where user_id is not null
-                    on conflict do nothing
-                    returning id, slug, title, user_id
-                )
-            select 'inserted' AS status, ins.id, ins.slug, ins.title, ins.user_id, t1.nickname FROM ins
-            cross join tuple t1
-            union all
-            select 'selected' AS status, f.id, f.slug, f.title, f.user_id, t.nickname
-            from   tuple t
-            inner join forum as f on f.user_id = t.user_id ;
-        ";
-
-
-        private static readonly string sqlInsertThread = @"
-            WITH
-                author as (
-                    select ID, nickname from ""user"" where lower(nickname) = lower(@nickname) limit 1
-                ),
-                ff as (
-                    select ID, slug from forum where lower(slug) = lower(@forum_slug) limit 1
-                ),
-                tuple AS (
-                    SELECT
-                        case when @created is not null
-                            then @created
-                            else now()
-                        end as created,
-                        @message as message,
-                        @slug as slug,
-                        @title as title,
-                        (select ID from author) as author_id,
-                        (select ID from ff) as forum_id
-                ),
-                ins AS (
-                    INSERT INTO thread (created, message, slug, title, author_id, forum_id)
-                        SELECT created, message, slug, title, author_id, forum_id FROM tuple WHERE forum_id IS NOT NULL and author_id is not null
-                    ON CONFLICT DO NOTHING
-                    RETURNING id, author_id, created, forum_id, message, slug, title
-                )
-            SELECT
-                'inserted' AS status,
-                id,
-                (select nickname from author),
-                created,
-                (select slug from ff),
-                message,
-                slug,
-                title,
-                (select sum(vote) from vote where thread_id = id) as votes
-            FROM ins
-            UNION ALL
-            SELECT
-                'selected' AS status,
-                th.id,
-                u.nickname,
-                th.created,
-                f.slug,
-                th.message,
-                th.slug,
-                th.title,
-                (select sum(vote) from vote where thread_id = th.id) as votes
-            FROM tuple AS tu
-            INNER JOIN thread AS th ON lower(th.slug) = lower(tu.slug)
-            INNER JOIN ""user"" AS u ON u.ID = th.author_id
-            INNER JOIN forum as f ON f.ID = th.forum_id;
-        ";
-
-
-
-        private static readonly string sqlSelectForumDetails = @"
-            select
-                (select count(ID) from post where forum_id = f.ID) as posts,
-                slug,
-                (select count(ID) from thread where forum_id = f.ID) as threads,
-                title,
-                u.nickname
-            from forum f
-            inner join ""user"" u on f.user_id = u.ID
-            where
-               lower(f.slug) = lower(@slug)
-            ;
-        ";
-
-
-        private static readonly string sqlSelectForumThreads = @"
-        select
-            u.nickname,
-            t.created,
-            f.slug,
-            t.id,
-            t.message,
-            t.slug,
-            t.title,
-            t.votes
-        from thread t
-        inner join ""user"" u on t.author_id = u.ID
-        inner join forum f on t.forum_id = f.id
-        where
-            f.id = @id
-            {0}
-        order by t.created {1}
-        {2} 
-        ;
-        ";
-
-        private static readonly string sqlPreselectForumBySlug = @"
-            select
-                ID
-            from forum
-            where lower(slug) = lower(@slug)
-            limit 1
-        ";
-        private static readonly string sqlSelectForumUsers = @"
-            select distinct
-                u.about,
-                u.email,
-                u.fullname,
-                u.nickname,
-                convert_to(lower(u.nickname), 'utf8')
-            from ""user"" u
-            left join thread t on
-                            u.ID = t.author_ID
-                            and t.forum_id = @forum_id
-                            
-            left join post p on
-                            u.ID = p.author_ID
-                            and p.forum_id = @forum_id
-                           
-            where (p.ID is not null or t.ID is not null) {0}
-            order by 
-                convert_to(lower(u.nickname), 'utf8') {1}
-            {2}
-            ;
-        ";
-
-    #endregion
-
-    #region Fields
+        #region Fields
         private readonly IConfiguration Configuration;
-    #endregion
-    #region Constructor
+        #endregion
+        #region Constructor
         public ForumController(IConfiguration Configuration)
         {
             this.Configuration = Configuration;
         }
-    #endregion
+        #endregion
 
         [Route("api/forum/create")]
         [HttpPost]
@@ -209,7 +46,7 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    cmd.CommandText = sqlInsertForum;
+                    cmd.CommandText = ForumSqlConstants.SqlInsertForum;
                     cmd.Parameters.Add(
                         new NpgsqlParameter("@slug", forum.Slug));
                     cmd.Parameters.Add(
@@ -233,8 +70,7 @@ namespace KashirinDBApi.Controllers
                         {
                             Response.StatusCode = 404;
                         }
-                    }
-                    
+                    }  
                 }
             }
             return new JsonResult(Response.StatusCode != 404 ? newForum as object : string.Empty) ;
@@ -259,7 +95,7 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    cmd.CommandText = sqlInsertThread;
+                    cmd.CommandText = ForumSqlConstants.SqlInsertThread;
                     cmd.Parameters.Add(
                         new NpgsqlParameter("@nickname", thread.Author));
                     cmd.Parameters.Add(
@@ -317,7 +153,7 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    cmd.CommandText = sqlSelectForumDetails;
+                    cmd.CommandText = ForumSqlConstants.SqlSelectForumDetails;
                     cmd.Parameters.Add(new NpgsqlParameter("@slug", slug));
                     
                     using (var reader = cmd.ExecuteReader())
@@ -349,11 +185,12 @@ namespace KashirinDBApi.Controllers
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
                 conn.Open();
+                var transaction = conn.BeginTransaction();
                 int? preselectedID = null;
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    cmd.CommandText = sqlGetForumBySlug;
+                    cmd.CommandText = ForumSqlConstants.SqlGetForumBySlug;
                     cmd.Parameters.Add(new NpgsqlParameter("@slug", slug));
                     preselectedID = (int?)cmd.ExecuteScalar();
                 }
@@ -363,12 +200,20 @@ namespace KashirinDBApi.Controllers
                     {
                         cmd.Connection = conn;
                         cmd.CommandText = String.Format(
-                            sqlSelectForumThreads,
-                            since != null ? $"and created {(desc ? "<=" : ">=")} '{since.Replace("'", "''")}'": "",
+                            ForumSqlConstants.SqlSelectForumThreads,
+                            since != null ? $"and created {(desc ? "<=" : ">=")} @since": "",
                             desc ? "desc" : "",
-                            limit.HasValue && 0 < limit ? $"limit + {limit.Value}" : ""
+                            limit.HasValue && 0 < limit ? $"limit @limit" : ""
                         );
                         cmd.Parameters.Add(new NpgsqlParameter("@id", preselectedID.Value));
+                        if(since != null)
+                        {
+                            cmd.Parameters.Add(new NpgsqlParameter("@since", since){ NpgsqlDbType = NpgsqlDbType.Timestamp });
+                        }
+                        if(limit.HasValue && 0 < limit)
+                        {
+                            cmd.Parameters.Add(new NpgsqlParameter("@limit", limit));
+                        }
                         
                         using (var reader = cmd.ExecuteReader())
                         {
@@ -414,19 +259,9 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    cmd.CommandText = sqlPreselectForumBySlug;
+                    cmd.CommandText = ForumSqlConstants.SqlGetForumBySlug;
                     cmd.Parameters.Add(new NpgsqlParameter("@slug", slug));
-                    using(var reader = cmd.ExecuteReader())
-                    {
-                        if(reader.Read())
-                        {
-                            forumID = reader.GetInt32(0);
-                        }
-                        else
-                        {
-                            Response.StatusCode = 404;
-                        }
-                    }
+                    forumID = (int?)cmd.ExecuteScalar();
                 }
 
                 if(forumID.HasValue)
@@ -435,12 +270,16 @@ namespace KashirinDBApi.Controllers
                     {
                         cmd.Connection = conn;
                         cmd.CommandText = String.Format(
-                            sqlSelectForumUsers,
-                            since != null ? $"and convert_to(lower(u.nickname), 'utf8') {(desc ? "<" : ">")} convert_to(lower('{since.Replace("'", "''")}'), 'utf8')": "",
-                            desc ? "desc" : "",
-                            limit.HasValue && 0 < limit ? $"limit + {limit.Value}" : ""
+                            ForumSqlConstants.SqlSelectForumUsers,
+                            since != null ? $"and convert_to(lower(u.nickname), 'utf8') {(desc ? "<" : ">")} convert_to(lower(@since), 'utf8')": "",
+                            desc ? "desc" : ""
                         );
                         cmd.Parameters.Add(new NpgsqlParameter("@forum_id", forumID.Value));
+                        if(since != null)
+                        {
+                            cmd.Parameters.Add(new NpgsqlParameter("@since", since));
+                        }
+                        cmd.Parameters.Add(new NpgsqlParameter("@limit", limit ?? int.MaxValue));
                         
                         using (var reader = cmd.ExecuteReader())
                         {
@@ -458,6 +297,10 @@ namespace KashirinDBApi.Controllers
                             }
                         }
                     }
+                }
+                else
+                {
+                    Response.StatusCode = 404;
                 }
                 
             }

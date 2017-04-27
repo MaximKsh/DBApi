@@ -7,149 +7,21 @@ using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using KashirinDBApi.Controllers.Extensions;
 using KashirinDBApi.Controllers.Helpers;
-
+using KashirinDBApi.Controllers.SqlConstants;
 
 namespace KashirinDBApi.Controllers
 {
     public class UserController : Controller
     {
-       
-    #region sql
-
-        private static readonly string sqlInsertUser = @"
-            with tuple as (
-                select
-                    @about as about,
-                    @email as email,
-                    @fullname as fullname,
-                    @nickname as nickname
-                ),
-                ins as (
-                    insert into ""user"" (about, email, fullname, nickname)
-                    select about, email, fullname, nickname from tuple
-                    on conflict do nothing
-                    returning id, about, email, fullname, nickname
-                )
-            select 'inserted' AS status, id, about, email, fullname, nickname FROM ins
-            union all
-            select 'selected' AS status, u.id, u.about, u.email, u.fullname, u.nickname
-            from   tuple t
-            inner join ""user"" u on lower(u.email) = lower(t.email) or lower(u.nickname) = lower(t.nickname);
-        ";
-
-        private static readonly string sqlSelectProfile = @"
-            select 
-                about,
-                email,
-                fullname,
-                nickname
-            from ""user""
-            where 
-                lower(nickname) = lower(@name)
-            ;
-        ";
-
-        private static readonly string sqlUpdateProfileWithoutConstraintChecking = @"
-            update 
-                ""user""
-            set 
-                {0}
-                id = id
-            where
-                lower(nickname) = lower(@nickname)
-            returning about, email, fullname, nickname, 'updated'
-            ;
-        ";
-        private static readonly string sqlUpdateProfileWithEmailConflictChecking = @"
-            with same_email(ID) as
-                (
-                    select
-                        ID
-                    from ""user""
-                    where
-                        lower(email) = lower(@email)
-                        and lower(nickname) <> lower(@nickname)
-                ),
-                upd as (
-                    update
-                        ""user""
-                    set
-                        email = case
-                                    when exists(select * from same_email)
-                                    then email
-                                    else @email
-                                 end,
-                        {0}
-                        id = id
-                    where
-                        lower(nickname) = lower(@nickname)
-                    RETURNING about, email, fullname, nickname
-                )
-            select
-                about,
-                email,
-                fullname,
-                nickname,
-                case
-                    when exists(select * from same_email)
-                    then 'conflicted'
-                    else 'updated'
-                end as status
-            from upd;
-        ";
-
-        private static readonly string sqlUpdateAbout = "about = @about,";
-        private static readonly string sqlUpdateFullname = "fullname = @fullname,";
-        
-        
-
-    #endregion
-
-    #region Fields
+        #region Fields
         private readonly IConfiguration Configuration;
-    #endregion
-    #region Constructor
+        #endregion
+        #region Constructor
         public UserController(IConfiguration Configuration)
         {
             this.Configuration = Configuration;
         }
-    #endregion
-
-
-        private void BuildQuery(UserProfileDataContract profile, string name, NpgsqlCommand cmd)
-        {
-            string queryResult = string.Empty;
-
-            string baseQuery =  string.Empty; 
-           
-            cmd.Parameters.Add(new NpgsqlParameter("@nickname", name));
-            if (profile.Email != null)
-            {
-                baseQuery = sqlUpdateProfileWithEmailConflictChecking;
-                cmd.Parameters.Add(new NpgsqlParameter("@email", profile.Email));
-            }
-            else
-            {
-                baseQuery = sqlUpdateProfileWithoutConstraintChecking;
-            }
-
-            string subquery = string.Empty;
-            if(profile.About != null)
-            {
-                 cmd.Parameters.Add(new NpgsqlParameter("@about", profile.About));
-                 subquery += sqlUpdateAbout;
-            }
-            if(profile.Fullname != null)
-            {
-                cmd.Parameters.Add(new NpgsqlParameter("@fullname", profile.Fullname));
-                subquery += sqlUpdateFullname;
-            }
-            
-            queryResult = string.Format(
-                    baseQuery,
-                    subquery);
-            cmd.CommandText =  queryResult;
-        }
+        #endregion
 
         public string Index(string name)
         {
@@ -170,7 +42,7 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    cmd.CommandText = sqlInsertUser;
+                    cmd.CommandText = UserSqlConstants.SqlInsertUser;
                     cmd.Parameters.Add(
                         Helper.NewNullableParameter("@about", userProfile.About));
                     cmd.Parameters.Add(
@@ -221,7 +93,14 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    BuildQuery(userProfile, name, cmd);
+                    cmd.CommandText = userProfile.Email != null ?
+                                      UserSqlConstants.SqlUpdateProfileWithEmailConflictChecking:
+                                      UserSqlConstants.SqlUpdateProfileWithoutConstraintChecking;
+                    cmd.Parameters.Add(new NpgsqlParameter("@nickname", name));
+                    cmd.Parameters.Add(Helper.NewNullableParameter("@email", userProfile.Email));
+                    cmd.Parameters.Add(Helper.NewNullableParameter("@about", userProfile.About));
+                    cmd.Parameters.Add(Helper.NewNullableParameter("@fullname", userProfile.Fullname));
+
                     using (var reader = cmd.ExecuteReader())
                     {
                         if(reader.Read())
@@ -258,7 +137,7 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    cmd.CommandText = sqlSelectProfile;
+                    cmd.CommandText = UserSqlConstants.SqlSelectProfile;
                     cmd.Parameters.Add(new NpgsqlParameter("@name", name));
                     
                     using (var reader = cmd.ExecuteReader())
