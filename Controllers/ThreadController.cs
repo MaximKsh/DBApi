@@ -104,7 +104,8 @@ namespace KashirinDBApi.Controllers
             long threadID,
             string threadSlug,
             long forumID,
-            string forumSlug)
+            string forumSlug,
+            DateTime? created)
         {
             List<PostDetailsDataContract> createdPosts = new List<PostDetailsDataContract>();
             using (var cmd = new NpgsqlCommand())
@@ -112,7 +113,7 @@ namespace KashirinDBApi.Controllers
                 cmd.Connection = conn;
                 cmd.CommandText = ThreadSqlConstants.SqlInsertPosts;
 
-                cmd.Parameters.Add(Helper.NewNullableParameter("@created", DateTime.Now, NpgsqlDbType.Timestamp));
+                cmd.Parameters.Add(Helper.NewNullableParameter("@created", created, NpgsqlDbType.Timestamp));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_id", forumID, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_slug", forumSlug));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@thread_id", threadID, NpgsqlDbType.Integer));
@@ -184,6 +185,7 @@ namespace KashirinDBApi.Controllers
         [HttpPost]
         public JsonResult Create(string slug_or_id)
         {
+            var created = DateTime.Now;
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(List<PostDetailsDataContract>));
             var posts = (List<PostDetailsDataContract>)js.ReadObject(Request.Body);
 
@@ -202,7 +204,8 @@ namespace KashirinDBApi.Controllers
                         threadID.Value, 
                         threadSlug, 
                         forumID.Value, 
-                        forumSlug
+                        forumSlug,
+                        created
                     );   
                 }
                 else
