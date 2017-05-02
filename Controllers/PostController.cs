@@ -52,7 +52,7 @@ namespace KashirinDBApi.Controllers
                     postFull.Post.Created = reader
                                         .GetTimeStamp(reader.GetOrdinal("post_created"))
                                         .DateTime
-                                        .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                                        .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                     postFull.Post.Forum = reader.GetValueOrDefault("post_forum", "");
                     postFull.Post.ID = reader.GetInt32(reader.GetOrdinal("post_id"));
                     postFull.Post.IsEdited = reader.GetBoolean(reader.GetOrdinal("post_isedited"));   
@@ -83,7 +83,7 @@ namespace KashirinDBApi.Controllers
                         postFull.Thread.Created = reader
                                         .GetTimeStamp(reader.GetOrdinal("thread_created"))
                                         .DateTime
-                                        .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                                        .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                         postFull.Thread.Forum = reader.GetValueOrDefault("thread_forum", "");
                         postFull.Thread.ID = reader.GetInt32(reader.GetOrdinal("thread_id"));
                         postFull.Thread.Message = reader.GetValueOrDefault("thread_message", "");
@@ -128,7 +128,7 @@ namespace KashirinDBApi.Controllers
                                 postDetails.Created = reader
                                                 .GetTimeStamp(2)
                                                 .DateTime
-                                                .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                                                .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                                 postDetails.Forum = reader.GetValueOrDefault(3, "");
                                 postDetails.IsEdited = reader.GetBoolean(4);
                                 postDetails.Message = reader.GetValueOrDefault(5, "");

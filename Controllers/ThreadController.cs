@@ -113,7 +113,7 @@ namespace KashirinDBApi.Controllers
                 cmd.Connection = conn;
                 cmd.CommandText = ThreadSqlConstants.SqlInsertPosts;
 
-                cmd.Parameters.Add(Helper.NewNullableParameter("@created", created, NpgsqlDbType.Timestamp));
+                cmd.Parameters.Add(Helper.NewNullableParameter("@created", DBNull.Value, NpgsqlDbType.Timestamp));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_id", forumID, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_slug", forumSlug));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@thread_id", threadID, NpgsqlDbType.Integer));
@@ -151,7 +151,7 @@ namespace KashirinDBApi.Controllers
                             createdPost.Created = reader
                                             .GetTimeStamp(1)
                                             .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                             createdPost.Thread = threadID;
                             createdPost.Forum = forumSlug;
                             createdPost.IsEdited = reader.GetBoolean(2);
@@ -253,7 +253,7 @@ namespace KashirinDBApi.Controllers
                             updatedThread.Created = reader
                                             .GetTimeStamp(1)
                                             .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                             updatedThread.Forum = reader.GetValueOrDefault(2, "");
                             updatedThread.ID = reader.GetInt32(3);
                             updatedThread.Message = reader.GetValueOrDefault(4, "");
@@ -303,7 +303,7 @@ namespace KashirinDBApi.Controllers
                             thread.Created = reader
                                             .GetTimeStamp(1)
                                             .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                             thread.Forum = reader.GetValueOrDefault(2, "");
                             thread.ID = reader.GetInt32(3);
                             thread.Message = reader.GetValueOrDefault(4, "");
@@ -403,7 +403,7 @@ namespace KashirinDBApi.Controllers
                                 updatedThread.Created = reader
                                                 .GetTimeStamp(1)
                                                 .DateTime
-                                                .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                                                .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                                 updatedThread.Forum = reader.GetValueOrDefault(2, "");
                                 updatedThread.ID = reader.GetInt32(3);
                                 updatedThread.Message = reader.GetValueOrDefault(4, "");
@@ -459,7 +459,7 @@ namespace KashirinDBApi.Controllers
                                 Created = reader
                                             .GetTimeStamp(2)
                                             .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
                                 Forum = reader.GetValueOrDefault(3, ""),
                                 IsEdited = reader.GetBoolean(4),
                                 Message = reader.GetValueOrDefault(5, ""),
@@ -513,7 +513,7 @@ namespace KashirinDBApi.Controllers
                                 Created = reader
                                             .GetTimeStamp(2)
                                             .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
                                 Forum = reader.GetString(3),
                                 IsEdited = reader.GetBoolean(4),
                                 Message = reader.GetValueOrDefault(5, ""),
@@ -566,7 +566,7 @@ namespace KashirinDBApi.Controllers
                                 Created = reader
                                             .GetTimeStamp(2)
                                             .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
                                 Forum = reader.GetString(3),
                                 IsEdited = reader.GetBoolean(4),
                                 Message = reader.GetValueOrDefault(5, ""),

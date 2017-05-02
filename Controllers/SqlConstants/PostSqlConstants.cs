@@ -32,7 +32,7 @@ with upd as
 select
     up.id,
     up.author_name,
-    up.created,
+    up.created at time zone 'Europe/Moscow',
     up.forum_slug,
     up.isedited,
     up.message,
@@ -53,7 +53,7 @@ select
     {2}
     -- Пост
     p.author_name as post_author,
-    p.created as post_created,
+    p.created at time zone 'Europe/Moscow' as post_created,
     p.forum_slug as post_forum,
     p.id as post_id,
     p.isedited as post_isedited,
@@ -86,7 +86,7 @@ limit 1;
 
         public static readonly string SqlThreadFields = @"
     t.author_name as thread_author,
-    t.created as thread_created,
+    t.created at time zone 'Europe/Moscow' as thread_created,
     t.forum_slug as thread_forum,
     t.id as thread_id,
     t.message as thread_message,

@@ -77,14 +77,14 @@ insert into post(id, author_id, author_name, created, forum_id, forum_slug,
         lower(u.nickname) = lower(@author_name)
 )
 on conflict do nothing
-returning ID, created, isedited, message, parent_id
+returning ID, created at time zone 'Europe/Moscow', isedited, message, parent_id
 ;  
         ";
 
         private static readonly string SqlSelectThreadDetails = @"
 select
     t.author_name as author,
-    t.created,
+    t.created at time zone 'Europe/Moscow',
     t.forum_slug as forum,
     t.id,
     t.message,
@@ -119,7 +119,7 @@ with ins as
 )
 select
     t.author_name as author,
-    t.created,
+    t.created at time zone 'Europe/Moscow',
     t.forum_slug as forum,
     t.id,
     t.message,
@@ -150,7 +150,7 @@ where
     id = @thread_id
 returning
     author_name as author,
-    created,
+    created at time zone 'Europe/Moscow',
     forum_slug as forum,
     id,
     message,
@@ -168,7 +168,7 @@ from
     select
         p.id,
         p.author_name,
-        p.created,
+        p.created at time zone 'Europe/Moscow',
         p.forum_slug,
         p.isedited,
         p.message,
@@ -190,7 +190,7 @@ from
     select
         id,
         author_name,
-        created,
+        created at time zone 'Europe/Moscow',
         forum_slug,
         isedited,
         message,
@@ -230,7 +230,7 @@ new_marker as
 select
     id,
     author_name,
-    created,
+    created at time zone 'Europe/Moscow',
     forum_slug,
     isedited,
     message,
