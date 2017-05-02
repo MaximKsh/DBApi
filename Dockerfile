@@ -64,6 +64,6 @@ EXPOSE 5000
 
 WORKDIR $WORK
 # Собираем проект
-RUN dotnet migrate && dotnet restore && dotnet build
+RUN dotnet restore && dotnet build
 # Запуск
 CMD service postgresql start && dotnet run
