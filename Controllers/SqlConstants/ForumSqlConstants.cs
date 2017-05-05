@@ -35,7 +35,7 @@ union all
 select 'selected' AS status, f.id, f.slug, f.title, f.user_id, f.user_name
 from forum as f
 where
-    f.user_id = (select user_id from tuple);
+    lower(f.slug) = lower(@slug);
 ";
 
 
