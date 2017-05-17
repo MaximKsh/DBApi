@@ -5,20 +5,21 @@ MAINTAINER Kashirin Maxim
 # Обновление списка пакетов
 RUN apt-get -y update
 
-ENV PGVER 9.4
+ENV PGVER 9.6
 ENV WORK /opt/DBApi 
 # Обвновление списка пакетов
-RUN apt-get install -y --no-install-recommends \
-        postgresql-$PGVER \
-        apt-transport-https \
-        apt-utils \
-        openssl \
-        ca-certificates \ 
-    && rm -rf /var/lib/apt/lists/*
+#RUN apt-get install -y --no-install-recommends \
+#        postgresql-$PGVER \
+#        apt-transport-https \
+#        apt-utils \
+#        openssl \
+#        ca-certificates \ 
+#    && rm -rf /var/lib/apt/lists/*
 
-
-
-
+RUN wget -q https://www.postgresql.org/media/keys/ACCC4CF8.asc -O - | apt-key add -
+RUN sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ jessie-pgdg main" >> /etc/apt/sources.list.d/pgdg.list'
+RUN apt-get update
+RUN apt-get install postgresql postgresql-contrib -y --no-install-recommends
 #RUN sh -c 'echo "deb [arch=amd64] https://apt-mo.trafficmanager.net/repos/dotnet-release/ xenial main" > /etc/apt/sources.list.d/dotnetdev.list'
 #RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 417A0893
 #RUN apt-get update
