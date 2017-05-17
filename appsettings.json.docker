@@ -1,3 +1,3 @@
 {
-    "connection_string": "Host=localhost;Port=5432;Username=docker;Password=docker;Database=docker;Pooling=true;Maximum Pool Size=10;"
+    "connection_string": "Host=localhost;Port=5432;Username=docker;Password=docker;Database=docker"
 }

@@ -49,6 +49,9 @@ RUN echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/$PGVER/main/pg_hba
 
 # And add ``listen_addresses`` to ``/etc/postgresql/$PGVER/main/postgresql.conf``
 RUN echo "listen_addresses='*'" >> /etc/postgresql/$PGVER/main/postgresql.conf
+RUN echo "shared_buffers = 10MB" >> /etc/postgresql/$PGVER/main/postgresql.conf
+RUN echo "dynamic_shared_memory_type = none" >> /etc/postgresql/$PGVER/main/postgresql.conf
+
 
 # Expose the PostgreSQL port
 EXPOSE 5432

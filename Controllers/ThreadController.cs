@@ -110,55 +110,83 @@ namespace KashirinDBApi.Controllers
             List<PostDetailsDataContract> createdPosts = new List<PostDetailsDataContract>();
             using (var cmd = new NpgsqlCommand())
             {
-                cmd.Connection = conn;
-                cmd.CommandText = ThreadSqlConstants.SqlInsertPosts;
+                var builder = new StringBuilder();
+                builder.AppendLine("insert into post(id, author_id, author_name, created, forum_id, forum_slug, message, parent_id, path, thread_id, thread_slug)(");
+                var oneSelect = @"
+(
+select
+    nextval('post_id_seq'),
+    u.id,
+    u.nickname,
+    @created,
+    @forum_id,
+    @forum_slug,
+    @message_{1},
+    case when @parentID_{1} = 0 
+        then 0
+        else p.ID
+    end,
+    case when @parentID_{1} = 0 
+        then array_append('{0}' :: BIGINT [], currval('post_id_seq'))
+        else array_append(p.path, currval('post_id_seq'))
+    end,
+    @thread_id,
+    @thread_slug
+from ""user"" u
+left join post p on p.ID = @parentID_{1} and p.thread_id = @thread_id 
+where
+    lower(u.nickname) = lower(@author_name_{1})  
+)             
+";
+                int cnt = 0;
 
-                cmd.Parameters.Add(Helper.NewNullableParameter("@created", DBNull.Value, NpgsqlDbType.Timestamp));
+                foreach(var post in posts)
+                {
+                    cmd.Parameters.Add(Helper.NewNullableParameter($"@author_name_{cnt}", post.Author, NpgsqlDbType.Varchar));
+                    cmd.Parameters.Add(Helper.NewNullableParameter($"@parentID_{cnt}", post.Parent,NpgsqlDbType.Integer));
+                    cmd.Parameters.Add(Helper.NewNullableParameter($"@message_{cnt}", post.Message, NpgsqlDbType.Varchar));
+                    builder.AppendFormat(oneSelect, "{}", cnt.ToString());
+                    if(cnt != posts.Count - 1) 
+                    {
+                        builder.AppendLine("union all");
+                    }
+                    cnt++;
+                }
+                builder.AppendLine(")on conflict do nothing returning ID, author_name, created at time zone 'Europe/Moscow', isedited, message, parent_id;" );
+
+                cmd.Connection = conn;
+                cmd.CommandText = builder.ToString();;
+                cmd.Parameters.Add(Helper.NewNullableParameter("@created", DateTime.Now, NpgsqlDbType.Timestamp));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_id", forumID, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_slug", forumSlug));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@thread_id", threadID, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@thread_slug", threadSlug));
 
-                NpgsqlParameter authorNameParam = new NpgsqlParameter("@author_name", NpgsqlDbType.Varchar);
-                NpgsqlParameter parentIDParam = new NpgsqlParameter("@parentID", NpgsqlDbType.Integer);
-                NpgsqlParameter messageParam = new NpgsqlParameter("@message", NpgsqlDbType.Varchar);
-                cmd.Parameters.AddRange(new NpgsqlParameter[]{authorNameParam, parentIDParam, messageParam});
-
                 bool conflict = false;
                 var transaction = conn.BeginTransaction();
-                foreach(var post in posts)
+                cmd.Transaction = transaction;
+                using(var reader = cmd.ExecuteReader())
                 {
-                    authorNameParam.Value = post.Author;
-                    parentIDParam.Value = post.Parent;
-                    messageParam.Value = post.Message;
-                    using(var reader = cmd.ExecuteReader())
+                    while(reader.Read())
                     {
-                        if(reader.Read())
+                        if(reader.IsDBNull(5))
                         {
-                            if(reader.IsDBNull(4))
-                            {
-                                conflict = true;
-                                break;
-                            }
-
-                            var createdPost = new PostDetailsDataContract();
-                            createdPost.ID = reader.GetInt32(0);
-                            createdPost.Author = post.Author;
-                            createdPost.Created = reader
-                                            .GetTimeStamp(1)
-                                            .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
-                            createdPost.Thread = threadID;
-                            createdPost.Forum = forumSlug;
-                            createdPost.IsEdited = reader.GetBoolean(2);
-                            createdPost.Message = reader.GetValueOrDefault(3, "");
-                            createdPost.Parent = reader.GetInt32(4);
-                            createdPosts.Add(createdPost);
-                        }
-                        else
-                        {
+                            conflict = true;
                             break;
                         }
+                        var createdPost = new PostDetailsDataContract();
+                        createdPost.ID = reader.GetInt32(0);
+                        createdPost.Author = reader.GetString(1);
+                        createdPost.Created = reader
+                                        .GetTimeStamp(2)
+                                        .DateTime
+                                        .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
+                        createdPost.Thread = threadID;
+                        createdPost.Forum = forumSlug;
+                        createdPost.IsEdited = reader.GetBoolean(3);
+                        createdPost.Message = reader.GetValueOrDefault(4, "");
+                        createdPost.Parent = reader.GetInt32(5);
+                        createdPosts.Add(createdPost);
                     }
                 }
                 if(createdPosts.Count == posts.Count)
@@ -171,8 +199,6 @@ namespace KashirinDBApi.Controllers
                     transaction.Rollback();
                     Response.StatusCode = conflict ? 409 : 404;
                 }
-
-                
             }
             return createdPosts;
         }
@@ -186,6 +212,7 @@ namespace KashirinDBApi.Controllers
             var posts = (List<PostDetailsDataContract>)js.ReadObject(Request.Body);
 
             List<PostDetailsDataContract> createdPosts = null;
+            
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
                 conn.Open();
@@ -208,6 +235,8 @@ namespace KashirinDBApi.Controllers
                 {
                     Response.StatusCode = 404;
                 }
+
+                Console.WriteLine(new NpgsqlCommand("select sum(numbackends) from pg_stat_database;", conn).ExecuteScalar());
             }
 
             return new JsonResult( Response.StatusCode == 201 ? (object)createdPosts : string.Empty);
