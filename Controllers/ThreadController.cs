@@ -124,10 +124,6 @@ namespace KashirinDBApi.Controllers
                 NpgsqlParameter messageParam = new NpgsqlParameter("@message", NpgsqlDbType.Varchar);
                 cmd.Parameters.AddRange(new NpgsqlParameter[]{authorNameParam, parentIDParam, messageParam});
 
-                if(!cmd.IsPrepared && posts.Count > 3)
-                {
-                    cmd.Prepare();
-                }
                 bool conflict = false;
                 var transaction = conn.BeginTransaction();
                 foreach(var post in posts)
