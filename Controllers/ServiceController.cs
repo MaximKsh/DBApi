@@ -3,6 +3,7 @@ using KashirinDBApi.Controllers.DataContracts;
 using Npgsql;
 using Microsoft.Extensions.Configuration;
 using System;
+using System.Threading.Tasks;
 
 namespace KashirinDBApi.Controllers
 {
@@ -51,16 +52,16 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/service/clear")]
         [HttpPost]
-        public void Clear()
+        public async void Clear()
         {
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
                     cmd.CommandText = sqlClear;
-                    cmd.ExecuteNonQuery();
+                    await cmd.ExecuteNonQueryAsync();
                 }
             }
             Response.StatusCode = 200;
@@ -68,7 +69,7 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/service/status")]
         [HttpGet]
-        public JsonResult Status()
+        public async Task<JsonResult> Status()
         {
             ServiceStatusDataContract status = new ServiceStatusDataContract
             {
@@ -79,14 +80,14 @@ namespace KashirinDBApi.Controllers
             };
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
                     cmd.CommandText = sqlStatus;
-                    using (var reader = cmd.ExecuteReader())
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
-                        if(reader.Read())
+                        if(await reader.ReadAsync())
                         {
                             status.Forum = reader.GetInt32(0);
                             status.Post = reader.GetInt32(1);

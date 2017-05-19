@@ -41,44 +41,34 @@ where
         public static readonly string SqlInsertPosts = @"
 insert into post(id, author_id, author_name, created, forum_id, forum_slug,
                      message, parent_id, path, thread_id, thread_slug)
-(
-    with parent as
-    (
-        select 
-            ID,
-            path 
-        from post p 
-        where 
-            p.ID = @parentID and p.thread_id = @thread_id
-    )
+(  
     select
-        nextval('post_id_seq'),
+        t.id, 
         u.id,
         u.nickname,
-        case when @created is null
-            then now()
-            else @created
-        end as created,
+        @created,
         @forum_id,
         @forum_slug,
-        @message,
-        case when @parentID = 0 
+        t.msg,
+        case when t.pid = 0 
             then 0
-            else (select ID from parent)
-        end,
-        case when @parentID = 0 
-            then array_append('{}' :: BIGINT [], currval('post_id_seq'))
-            else array_append((select path from parent), currval('post_id_seq'))
-        end,
+            else p.id
+        end, 
+        array_append(coalesce(p.path, ARRAY[]::int[]), t.id::int),
         @thread_id,
         @thread_slug
-    from ""user"" u
-    where
-        lower(u.nickname) = lower(@author_name)
+    from
+        unnest(
+            ARRAY[{0}],
+            @parents,
+            @authors,
+            @messages
+        ) with ordinality t(id, pid, author_name, msg)
+    join ""user"" u on lower(t.author_name) = lower(u.nickname)
+    left join post p on t.pid = p.id and p.thread_id = @thread_id
+    order by ordinality
 )
-on conflict do nothing
-returning ID, created at time zone 'Europe/Moscow', isedited, message, parent_id
-;  
+returning id, author_name, message, parent_id;
         ";
 
         private static readonly string SqlSelectThreadDetails = @"

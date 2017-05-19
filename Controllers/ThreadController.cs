@@ -12,6 +12,8 @@ using System.Linq;
 using KashirinDBApi.Controllers.SqlConstants;
 using System.Text;
 using Npgsql.Logging;
+using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
 
 namespace KashirinDBApi.Controllers
 {
@@ -27,8 +29,8 @@ namespace KashirinDBApi.Controllers
         }
         #endregion
 
-        private (long?, string, long?, string) PreselectThreadAndForum(NpgsqlConnection conn,
-                                                                       string slugOrID)
+        private async Task<(long?, string, long?, string)> PreselectThreadAndForum(NpgsqlConnection conn,
+                                                                                   string slugOrID)
         {
             string slug = slugOrID;
             bool useID = long.TryParse(slugOrID, out long id);
@@ -48,9 +50,9 @@ namespace KashirinDBApi.Controllers
                         new NpgsqlParameter("@slug", slug)
                 );
 
-                using(var reader = cmd.ExecuteReader())
+                using(var reader = await cmd.ExecuteReaderAsync())
                 {
-                    if(reader.Read())
+                    if(await reader.ReadAsync())
                     {
                         threadID = reader.GetInt32(0);
                         threadSlug = reader.GetValueOrDefault(1, "");
@@ -62,7 +64,7 @@ namespace KashirinDBApi.Controllers
             return (threadID, threadSlug, forumID, forumSlug);
         }
 
-        private (long?, string, long?) PreselectThreadAndUser(NpgsqlConnection conn,
+        private async Task<(long?, string, long?)> PreselectThreadAndUser(NpgsqlConnection conn,
                                                               string slugOrID,
                                                               string authorName)
         {
@@ -85,9 +87,9 @@ namespace KashirinDBApi.Controllers
                 );
                 cmd.Parameters.Add(new NpgsqlParameter("@nickname", authorName));
 
-                using(var reader = cmd.ExecuteReader())
+                using(var reader = await cmd.ExecuteReaderAsync())
                 {
-                    if(reader.Read())
+                    if(await reader.ReadAsync())
                     {
                         threadID = reader.GetInt32(0);
                         threadSlug = reader.GetValueOrDefault(1, "");
@@ -98,7 +100,7 @@ namespace KashirinDBApi.Controllers
             return (threadID, threadSlug, userID);
         }
 
-        private List<PostDetailsDataContract> InsertPosts(
+        private async Task<List<PostDetailsDataContract>> InsertPosts(
             NpgsqlConnection conn,
             List<PostDetailsDataContract> posts,
             long threadID,
@@ -111,91 +113,76 @@ namespace KashirinDBApi.Controllers
             using (var cmd = new NpgsqlCommand())
             {
                 cmd.Connection = conn;
-                cmd.CommandText = ThreadSqlConstants.SqlInsertPosts;
-
-                cmd.Parameters.Add(Helper.NewNullableParameter("@created", DBNull.Value, NpgsqlDbType.Timestamp));
+                cmd.CommandText = string.Format(
+                    ThreadSqlConstants.SqlInsertPosts,
+                    string.Join(",", Enumerable.Repeat("nextval('post_id_seq')", posts.Count))
+                );
+                cmd.Parameters.Add(Helper.NewNullableParameter("@created", created, NpgsqlDbType.Timestamp));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_id", forumID, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_slug", forumSlug));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@thread_id", threadID, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@thread_slug", threadSlug));
-
-                NpgsqlParameter authorNameParam = new NpgsqlParameter("@author_name", NpgsqlDbType.Varchar);
-                NpgsqlParameter parentIDParam = new NpgsqlParameter("@parentID", NpgsqlDbType.Integer);
-                NpgsqlParameter messageParam = new NpgsqlParameter("@message", NpgsqlDbType.Varchar);
-                cmd.Parameters.AddRange(new NpgsqlParameter[]{authorNameParam, parentIDParam, messageParam});
-
+                cmd.Parameters.Add(Helper.NewNullableParameter("@parents", posts.Select(p => (int)p.Parent).ToList(), NpgsqlDbType.Array | NpgsqlDbType.Integer));
+                cmd.Parameters.Add(Helper.NewNullableParameter("@authors",  posts.Select(p => p.Author).ToList(), NpgsqlDbType.Array | NpgsqlDbType.Text));
+                cmd.Parameters.Add(Helper.NewNullableParameter("@messages", posts.Select(p => p.Message).ToList(), NpgsqlDbType.Array | NpgsqlDbType.Text));
+                
+                var transact = conn.BeginTransaction();
+                cmd.Transaction = transact;
                 bool conflict = false;
-                var transaction = conn.BeginTransaction();
-                foreach(var post in posts)
+                using(var reader = await cmd.ExecuteReaderAsync())
                 {
-                    authorNameParam.Value = post.Author;
-                    parentIDParam.Value = post.Parent;
-                    messageParam.Value = post.Message;
-                    using(var reader = cmd.ExecuteReader())
+                    while(await reader.ReadAsync())
                     {
-                        if(reader.Read())
+                        if(reader.IsDBNull(3))
                         {
-                            if(reader.IsDBNull(4))
-                            {
-                                conflict = true;
-                                break;
-                            }
-
-                            var createdPost = new PostDetailsDataContract();
-                            createdPost.ID = reader.GetInt32(0);
-                            createdPost.Author = post.Author;
-                            createdPost.Created = reader
-                                            .GetTimeStamp(1)
-                                            .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
-                            createdPost.Thread = threadID;
-                            createdPost.Forum = forumSlug;
-                            createdPost.IsEdited = reader.GetBoolean(2);
-                            createdPost.Message = reader.GetValueOrDefault(3, "");
-                            createdPost.Parent = reader.GetInt32(4);
-                            createdPosts.Add(createdPost);
-                        }
-                        else
-                        {
+                            conflict = true;
                             break;
                         }
+                        
+                        var createdPost = new PostDetailsDataContract();
+                        createdPost.ID = reader.GetInt32(0);
+                        createdPost.Author = reader.GetString(1);
+                        createdPost.Created = created.Value.ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
+                        createdPost.Thread = threadID;
+                        createdPost.Forum = forumSlug;
+                        createdPost.IsEdited = false;
+                        createdPost.Message = reader.GetString(2);
+                        createdPost.Parent = reader.GetInt32(3);
+                        createdPosts.Add(createdPost);
                     }
                 }
-                if(createdPosts.Count == posts.Count)
+                if(createdPosts.Count != posts.Count)
                 {
-                    transaction.Commit();
-                    Response.StatusCode = 201;
+                    Response.StatusCode = conflict ? 409 : 404;
+                    await transact.RollbackAsync();
                 }
                 else
                 {
-                    transaction.Rollback();
-                    Response.StatusCode = conflict ? 409 : 404;
+                    Response.StatusCode = 201;
+                    await transact.CommitAsync();
                 }
-
-                
             }
             return createdPosts;
         }
 
         [Route("api/thread/{slug_or_id}/create")]
         [HttpPost]
-        public JsonResult Create(string slug_or_id)
+        public async Task<JsonResult> Create(string slug_or_id)
         {
             var created = DateTime.Now;
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(List<PostDetailsDataContract>));
             var posts = (List<PostDetailsDataContract>)js.ReadObject(Request.Body);
 
             List<PostDetailsDataContract> createdPosts = null;
-            
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
-                var (threadID, threadSlug, forumID, forumSlug) = PreselectThreadAndForum(conn, slug_or_id);
+                await conn.OpenAsync();
+                var (threadID, threadSlug, forumID, forumSlug) = await PreselectThreadAndForum(conn, slug_or_id);
 
                 if( threadID.HasValue 
                     && forumID.HasValue)
                 {
-                    createdPosts = InsertPosts(
+                    createdPosts = await InsertPosts(
                         conn,
                         posts, 
                         threadID.Value, 
@@ -322,7 +309,7 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/thread/{slug_or_id}/posts")]
         [HttpGet]
-        public JsonResult Posts(
+        public async Task<JsonResult> Posts(
             string slug_or_id, 
             int? limit,
             string marker, 
@@ -332,8 +319,8 @@ namespace KashirinDBApi.Controllers
             var postPage = new PostPageDataContract();
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
-                var (threadID, threadSlug, forumID, forumSlug) = PreselectThreadAndForum(conn, slug_or_id);
+                await conn.OpenAsync();
+                var (threadID, threadSlug, forumID, forumSlug) = await PreselectThreadAndForum(conn, slug_or_id);
 
                 if(!threadID.HasValue 
                     || !forumID.HasValue)
@@ -347,15 +334,15 @@ namespace KashirinDBApi.Controllers
                     cmd.Connection = conn;
                     if(sort == "flat")
                     {
-                        postPage = SelectFlat(conn, marker, limit, threadID.Value, desc);
+                        postPage = await SelectFlat(conn, marker, limit, threadID.Value, desc);
                     }
                     else if(sort == "tree")
                     {
-                        postPage = SelectTree(conn, marker, limit, threadID.Value, desc);
+                        postPage = await SelectTree(conn, marker, limit, threadID.Value, desc);
                     }
                     else if(sort == "parent_tree")
                     {
-                        postPage = SelectParentTree(conn, marker, limit, threadID.Value, desc);
+                        postPage = await SelectParentTree(conn, marker, limit, threadID.Value, desc);
                     }
                     else
                     {
@@ -369,7 +356,7 @@ namespace KashirinDBApi.Controllers
         
         [Route("api/thread/{slug_or_id}/vote")]
         [HttpPost]
-        public JsonResult Vote(string slug_or_id)
+        public async Task<JsonResult> Vote(string slug_or_id)
         {
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(VoteDataContract));
             var vote = (VoteDataContract)js.ReadObject(Request.Body);
@@ -377,8 +364,8 @@ namespace KashirinDBApi.Controllers
             
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
-                var (threadID, threadSlug, userID) = PreselectThreadAndUser(conn, slug_or_id, vote.Nickname);
+                await conn.OpenAsync();
+                var (threadID, threadSlug, userID) = await PreselectThreadAndUser(conn, slug_or_id, vote.Nickname);
 
                 if( threadID.HasValue 
                     && userID.HasValue)
@@ -392,14 +379,13 @@ namespace KashirinDBApi.Controllers
                         
                         cmd.Parameters.Add(new NpgsqlParameter("@vote", vote.Voice > 0 ? 1 : -1){NpgsqlDbType = NpgsqlDbType.Integer});
 
-                        using (var reader = cmd.ExecuteReader())
+                        using (var reader = await cmd.ExecuteReaderAsync())
                         {
-                            if(reader.Read())
+                            if(await reader.ReadAsync())
                             {
                                 updatedThread.Author = reader.GetValueOrDefault(0, "");
                                 updatedThread.Created = reader
-                                                .GetTimeStamp(1)
-                                                .DateTime
+                                                .GetDateTime(1)
                                                 .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                                 updatedThread.Forum = reader.GetValueOrDefault(2, "");
                                 updatedThread.ID = reader.GetInt32(3);
@@ -421,7 +407,7 @@ namespace KashirinDBApi.Controllers
         }
         
 
-        private PostPageDataContract SelectFlat(NpgsqlConnection conn,
+        private async Task<PostPageDataContract> SelectFlat(NpgsqlConnection conn,
                                                 string marker,
                                                 int? limit,
                                                 long threadID,
@@ -442,11 +428,11 @@ namespace KashirinDBApi.Controllers
                 cmd.Parameters.Add( new NpgsqlParameter("@from", from));
                 cmd.Parameters.Add( new NpgsqlParameter("@to", to));
             
-                using (var reader = cmd.ExecuteReader())
+                using (var reader = await cmd.ExecuteReaderAsync())
                 {
                     postPage.Posts = new List<PostDetailsDataContract>();
                     int? lastRN = null; 
-                    while(reader.Read())
+                    while(await reader.ReadAsync())
                     {
                         postPage.Posts.Add(
                             new PostDetailsDataContract()
@@ -454,13 +440,12 @@ namespace KashirinDBApi.Controllers
                                 ID = reader.GetInt32(0),
                                 Author = reader.GetString(1),
                                 Created = reader
-                                            .GetTimeStamp(2)
-                                            .DateTime
+                                            .GetDateTime(2)
                                             .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
                                 Forum = reader.GetValueOrDefault(3, ""),
                                 IsEdited = reader.GetBoolean(4),
                                 Message = reader.GetValueOrDefault(5, ""),
-                                Parent = reader.GetValueOrDefault(6, 0L),
+                                Parent = reader.GetValueOrDefault(6, 0),
                                 Thread = threadID
                             }
                         );
@@ -475,7 +460,7 @@ namespace KashirinDBApi.Controllers
             return postPage;
         }
 
-        private PostPageDataContract SelectTree(NpgsqlConnection conn,
+        private async Task<PostPageDataContract> SelectTree(NpgsqlConnection conn,
                                                 string marker,
                                                 int? limit,
                                                 long threadID,
@@ -496,11 +481,11 @@ namespace KashirinDBApi.Controllers
                 cmd.Parameters.Add( new NpgsqlParameter("@from", from));
                 cmd.Parameters.Add( new NpgsqlParameter("@to", to));
 
-                using (var reader = cmd.ExecuteReader())
+                using (var reader = await cmd.ExecuteReaderAsync())
                 {
                     postPage.Posts = new List<PostDetailsDataContract>();
                     int? lastRN = null; 
-                    while(reader.Read())
+                    while(await reader.ReadAsync())
                     {
                         postPage.Posts.Add(
                             new PostDetailsDataContract()
@@ -508,13 +493,12 @@ namespace KashirinDBApi.Controllers
                                 ID = reader.GetInt32(0),
                                 Author = reader.GetString(1),
                                 Created = reader
-                                            .GetTimeStamp(2)
-                                            .DateTime
+                                            .GetDateTime(2)
                                             .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
                                 Forum = reader.GetString(3),
                                 IsEdited = reader.GetBoolean(4),
                                 Message = reader.GetValueOrDefault(5, ""),
-                                Parent = reader.GetValueOrDefault(6, 0L),
+                                Parent = reader.GetValueOrDefault(6, 0),
                                 Thread = threadID
                             }
                         );
@@ -528,7 +512,7 @@ namespace KashirinDBApi.Controllers
             return postPage;
         }
 
-        private PostPageDataContract SelectParentTree(NpgsqlConnection conn,
+        private async Task<PostPageDataContract> SelectParentTree(NpgsqlConnection conn,
                                                       string marker,
                                                       int? limit,
                                                       long threadID,
@@ -549,11 +533,11 @@ namespace KashirinDBApi.Controllers
                 cmd.Parameters.Add( new NpgsqlParameter("@from", from));
                 cmd.Parameters.Add( new NpgsqlParameter("@to", to));
 
-                using (var reader = cmd.ExecuteReader())
+                using (var reader = await cmd.ExecuteReaderAsync())
                 {
                     postPage.Posts = new List<PostDetailsDataContract>();
                     int? lastRN = null; 
-                    while(reader.Read())
+                    while(await reader.ReadAsync())
                     {
                         postPage.Posts.Add(
                             new PostDetailsDataContract()
@@ -561,13 +545,12 @@ namespace KashirinDBApi.Controllers
                                 ID = reader.GetInt32(0),
                                 Author = reader.GetString(1),
                                 Created = reader
-                                            .GetTimeStamp(2)
-                                            .DateTime
+                                            .GetDateTime(2)
                                             .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
                                 Forum = reader.GetString(3),
                                 IsEdited = reader.GetBoolean(4),
                                 Message = reader.GetValueOrDefault(5, ""),
-                                Parent = reader.GetValueOrDefault(6, 0L),
+                                Parent = reader.GetValueOrDefault(6, 0),
                                 Thread = threadID
                             }
                         );

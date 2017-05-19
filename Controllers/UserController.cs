@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using KashirinDBApi.Controllers.Extensions;
 using KashirinDBApi.Controllers.Helpers;
 using KashirinDBApi.Controllers.SqlConstants;
+using System.Threading.Tasks;
 
 namespace KashirinDBApi.Controllers
 {
@@ -30,7 +31,7 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/User/{name}/Create")]
         [HttpPost]
-        public JsonResult Create(string name)
+        public async Task<JsonResult> Create(string name)
         {
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(UserProfileDataContract));
             var userProfile = (UserProfileDataContract)js.ReadObject(Request.Body);
@@ -38,7 +39,7 @@ namespace KashirinDBApi.Controllers
             bool isInserted = true;
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
@@ -51,9 +52,9 @@ namespace KashirinDBApi.Controllers
                         Helper.NewNullableParameter("@fullname", userProfile.Fullname));
                     cmd.Parameters.Add(new NpgsqlParameter("@nickname", name));
 
-                    using (var reader = cmd.ExecuteReader())
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
-                        while(reader.Read())
+                        while(await reader.ReadAsync())
                         {
                             if(isInserted 
                                 && reader.GetString(0) == "selected")
@@ -81,7 +82,7 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/User/{name}/Profile")]
         [HttpPost]
-        public JsonResult ProfilePost(string name)
+        public async Task<JsonResult> ProfilePost(string name)
         {
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(UserProfileDataContract));
             var userProfile = (UserProfileDataContract)js.ReadObject(Request.Body);
@@ -89,7 +90,7 @@ namespace KashirinDBApi.Controllers
             UserProfileDataContract profile = null;
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
@@ -101,9 +102,9 @@ namespace KashirinDBApi.Controllers
                     cmd.Parameters.Add(Helper.NewNullableParameter("@about", userProfile.About));
                     cmd.Parameters.Add(Helper.NewNullableParameter("@fullname", userProfile.Fullname));
 
-                    using (var reader = cmd.ExecuteReader())
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
-                        if(reader.Read())
+                        if(await reader.ReadAsync())
                         {
                             profile = new UserProfileDataContract();
                             profile.About = reader.GetValueOrDefault(0, "");
@@ -128,21 +129,21 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/User/{name}/Profile")]
         [HttpGet]
-        public JsonResult ProfileGet(string name)
+        public async Task<JsonResult> ProfileGet(string name)
         {
             UserProfileDataContract profile = null;
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
                     cmd.CommandText = UserSqlConstants.SqlSelectProfile;
                     cmd.Parameters.Add(new NpgsqlParameter("@name", name));
                     
-                    using (var reader = cmd.ExecuteReader())
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
-                        if(reader.Read())
+                        if(await reader.ReadAsync())
                         {
                             profile = new UserProfileDataContract();
                             profile.About = reader.GetValueOrDefault(0, "");

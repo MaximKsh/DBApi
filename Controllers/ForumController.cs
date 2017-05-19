@@ -10,6 +10,7 @@ using KashirinDBApi.Controllers.Helpers;
 using System.Collections.Generic;
 using NpgsqlTypes;
 using KashirinDBApi.Controllers.SqlConstants;
+using System.Threading.Tasks;
 
 namespace KashirinDBApi.Controllers
 {
@@ -28,7 +29,7 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/forum/create")]
         [HttpPost]
-        public JsonResult Create()
+        public async Task<JsonResult> Create()
         {
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(ForumDetailsDataContract));
             var forum = (ForumDetailsDataContract)js.ReadObject(Request.Body);
@@ -42,7 +43,7 @@ namespace KashirinDBApi.Controllers
             ForumDetailsDataContract newForum  = new ForumDetailsDataContract();
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
@@ -54,9 +55,9 @@ namespace KashirinDBApi.Controllers
                     cmd.Parameters.Add(
                         new NpgsqlParameter("@nickname",forum.User));
                     
-                    using (var reader = cmd.ExecuteReader())
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
-                        if(reader.Read())
+                        if(await reader.ReadAsync())
                         {
                             Response.StatusCode = reader.GetString(0) == "inserted" ?
                                                     201 :
@@ -78,7 +79,7 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/forum/{slug}/create")]
         [HttpPost]
-        public JsonResult CreateThread(string slug)
+        public async Task<JsonResult> CreateThread(string slug)
         {
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(ThreadDetailsDataContract));
             var thread = (ThreadDetailsDataContract)js.ReadObject(Request.Body);
@@ -91,7 +92,7 @@ namespace KashirinDBApi.Controllers
             ThreadDetailsDataContract newThread = new ThreadDetailsDataContract();
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
@@ -109,9 +110,9 @@ namespace KashirinDBApi.Controllers
                     cmd.Parameters.Add(
                         Helper.NewNullableParameter("@title", thread.Title));
                     
-                    using (var reader = cmd.ExecuteReader())
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
-                        if(reader.Read())
+                        if(await reader.ReadAsync())
                         {
                             Response.StatusCode = reader.GetString(0) == "inserted" ?
                                                     201 :
@@ -121,8 +122,7 @@ namespace KashirinDBApi.Controllers
                             newThread.ID = reader.GetInt32(1);
                             newThread.Author = reader.GetValueOrDefault(2, "");
                             newThread.Created = reader
-                                        .GetTimeStamp(3)
-                                        .DateTime
+                                        .GetDateTime(3)
                                         .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
                             newThread.Forum = reader.GetValueOrDefault(4, "");
                             newThread.Message = reader.GetValueOrDefault(5, "");
@@ -133,32 +133,30 @@ namespace KashirinDBApi.Controllers
                         {
                             Response.StatusCode = 404;
                         }
-                    }
-                    
+                    }  
                 }
             }
-
 
             return new JsonResult(Response.StatusCode != 404 ? (object)newThread : string.Empty);
         }
 
         [Route("api/forum/{slug}/details")]
         [HttpGet]
-        public JsonResult Details(string slug)
+        public async Task<JsonResult> Details(string slug)
         {
             ForumDetailsDataContract details = new ForumDetailsDataContract();
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
                     cmd.CommandText = ForumSqlConstants.SqlSelectForumDetails;
                     cmd.Parameters.Add(new NpgsqlParameter("@slug", slug));
                     
-                    using (var reader = cmd.ExecuteReader())
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
-                        if(reader.Read())
+                        if(await reader.ReadAsync())
                         {
                             details.Posts = reader.GetInt64(0);
                             details.Slug = reader.GetValueOrDefault(1, "");
@@ -179,20 +177,19 @@ namespace KashirinDBApi.Controllers
         
         [Route("api/forum/{slug}/threads")]
         [HttpGet]
-        public JsonResult Threads(string slug, int? limit, string since, bool desc = false)
+        public async Task<JsonResult> Threads(string slug, int? limit, string since, bool desc = false)
         {
             List<ThreadDetailsDataContract> threads = new List<ThreadDetailsDataContract>();
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
-                var transaction = conn.BeginTransaction();
+                await conn.OpenAsync();
                 int? preselectedID = null;
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
                     cmd.CommandText = ForumSqlConstants.SqlGetForumBySlug;
                     cmd.Parameters.Add(new NpgsqlParameter("@slug", slug));
-                    preselectedID = (int?)cmd.ExecuteScalar();
+                    preselectedID = (int?) await cmd.ExecuteScalarAsync();
                 }
                 if(preselectedID.HasValue)
                 {
@@ -207,16 +204,15 @@ namespace KashirinDBApi.Controllers
                         cmd.Parameters.Add(Helper.NewNullableParameter("@since", since, NpgsqlDbType.Timestamp));
                         cmd.Parameters.Add(new NpgsqlParameter("@limit", limit));
                         
-                        using (var reader = cmd.ExecuteReader())
+                        using (var reader = await cmd.ExecuteReaderAsync())
                         {
-                            while (reader.Read())
+                            while (await reader.ReadAsync())
                             {
                                 var thread = new ThreadDetailsDataContract()
                                 {
                                     Author = reader.GetValueOrDefault(0, ""),
                                     Created = reader
-                                            .GetTimeStamp(1)
-                                            .DateTime
+                                            .GetDateTime(1)
                                             .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
                                     Forum = reader.GetValueOrDefault(2, ""),
                                     ID = reader.GetInt32(3),
@@ -240,19 +236,19 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/forum/{slug}/users")]
         [HttpGet]
-        public JsonResult Users(string slug, int? limit, string since, bool desc = false)
+        public async Task<JsonResult> Users(string slug, int? limit, string since, bool desc = false)
         {
             List<UserProfileDataContract> users = new List<UserProfileDataContract>();
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 long? forumID = null;
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
                     cmd.CommandText = ForumSqlConstants.SqlGetForumBySlug;
                     cmd.Parameters.Add(new NpgsqlParameter("@slug", slug));
-                    forumID = (int?)cmd.ExecuteScalar();
+                    forumID = (int?) await cmd.ExecuteScalarAsync();
                 }
 
                 if(forumID.HasValue)
@@ -267,9 +263,9 @@ namespace KashirinDBApi.Controllers
                         cmd.Parameters.Add(Helper.NewNullableParameter("@since", since));
                         cmd.Parameters.Add(new NpgsqlParameter("@limit", limit ?? int.MaxValue));
                         
-                        using (var reader = cmd.ExecuteReader())
+                        using (var reader = await cmd.ExecuteReaderAsync())
                         {
-                            while (reader.Read())
+                            while (await reader.ReadAsync())
                             {
                                 var user = new UserProfileDataContract()
                                 {
