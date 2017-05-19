@@ -209,8 +209,6 @@ namespace KashirinDBApi.Controllers
                 {
                     Response.StatusCode = 404;
                 }
-
-                Console.WriteLine(new NpgsqlCommand("select sum(numbackends) from pg_stat_database;", conn).ExecuteScalar());
             }
 
             return new JsonResult( Response.StatusCode == 201 ? (object)createdPosts : string.Empty);
