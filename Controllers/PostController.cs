@@ -43,7 +43,7 @@ namespace KashirinDBApi.Controllers
                         );
             cmd.Parameters.Add(new NpgsqlParameter("@id", id){ NpgsqlDbType = NpgsqlDbType.Integer });
 
-            using(var reader = await cmd.ExecuteReaderAsync())
+            using(var reader = cmd.ExecuteReader())
             {
                 if(await reader.ReadAsync())
                 {
@@ -51,7 +51,8 @@ namespace KashirinDBApi.Controllers
                     postFull.Post = new PostDetailsDataContract();
                     postFull.Post.Author = reader.GetValueOrDefault("post_author", "");
                     postFull.Post.Created = reader
-                                        .GetDateTime(reader.GetOrdinal("post_created"))
+                                        .GetTimeStamp(reader.GetOrdinal("post_created"))
+                                        .DateTime
                                         .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                     postFull.Post.Forum = reader.GetValueOrDefault("post_forum", "");
                     postFull.Post.ID = reader.GetInt32(reader.GetOrdinal("post_id"));
@@ -81,7 +82,8 @@ namespace KashirinDBApi.Controllers
                         postFull.Thread = new ThreadDetailsDataContract();
                         postFull.Thread.Author = reader.GetValueOrDefault("thread_author", ""); 
                         postFull.Thread.Created = reader
-                                        .GetDateTime(reader.GetOrdinal("thread_created"))
+                                        .GetTimeStamp(reader.GetOrdinal("thread_created"))
+                                        .DateTime
                                         .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                         postFull.Thread.Forum = reader.GetValueOrDefault("thread_forum", "");
                         postFull.Thread.ID = reader.GetInt32(reader.GetOrdinal("thread_id"));
@@ -116,7 +118,7 @@ namespace KashirinDBApi.Controllers
                         cmd.Parameters.Add(new NpgsqlParameter("@id", id){ NpgsqlDbType = NpgsqlDbType.Integer });
                         cmd.Parameters.Add(new NpgsqlParameter("@message", postUpdate.Message));
 
-                        using(var reader = await cmd.ExecuteReaderAsync())
+                        using(var reader = cmd.ExecuteReader())
                         {
                             if(await reader.ReadAsync())
                             {
@@ -124,7 +126,8 @@ namespace KashirinDBApi.Controllers
                                 postDetails.ID = reader.GetInt32(0);
                                 postDetails.Author = reader.GetString(1);
                                 postDetails.Created = reader
-                                                .GetDateTime(2)
+                                                .GetTimeStamp(2)
+                                                .DateTime
                                                 .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                                 postDetails.Forum = reader.GetValueOrDefault(3, "");
                                 postDetails.IsEdited = reader.GetBoolean(4);

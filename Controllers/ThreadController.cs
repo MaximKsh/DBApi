@@ -379,13 +379,14 @@ namespace KashirinDBApi.Controllers
                         
                         cmd.Parameters.Add(new NpgsqlParameter("@vote", vote.Voice > 0 ? 1 : -1){NpgsqlDbType = NpgsqlDbType.Integer});
 
-                        using (var reader = await cmd.ExecuteReaderAsync())
+                        using (var reader = cmd.ExecuteReader())
                         {
                             if(await reader.ReadAsync())
                             {
                                 updatedThread.Author = reader.GetValueOrDefault(0, "");
                                 updatedThread.Created = reader
-                                                .GetDateTime(1)
+                                                .GetTimeStamp(1)
+                                                .DateTime
                                                 .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
                                 updatedThread.Forum = reader.GetValueOrDefault(2, "");
                                 updatedThread.ID = reader.GetInt32(3);
@@ -428,7 +429,7 @@ namespace KashirinDBApi.Controllers
                 cmd.Parameters.Add( new NpgsqlParameter("@from", from));
                 cmd.Parameters.Add( new NpgsqlParameter("@to", to));
             
-                using (var reader = await cmd.ExecuteReaderAsync())
+                using (var reader = cmd.ExecuteReader())
                 {
                     postPage.Posts = new List<PostDetailsDataContract>();
                     int? lastRN = null; 
@@ -440,7 +441,8 @@ namespace KashirinDBApi.Controllers
                                 ID = reader.GetInt32(0),
                                 Author = reader.GetString(1),
                                 Created = reader
-                                            .GetDateTime(2)
+                                            .GetTimeStamp(2)
+                                            .DateTime
                                             .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
                                 Forum = reader.GetValueOrDefault(3, ""),
                                 IsEdited = reader.GetBoolean(4),
@@ -481,7 +483,7 @@ namespace KashirinDBApi.Controllers
                 cmd.Parameters.Add( new NpgsqlParameter("@from", from));
                 cmd.Parameters.Add( new NpgsqlParameter("@to", to));
 
-                using (var reader = await cmd.ExecuteReaderAsync())
+                using (var reader = cmd.ExecuteReader())
                 {
                     postPage.Posts = new List<PostDetailsDataContract>();
                     int? lastRN = null; 
@@ -493,7 +495,8 @@ namespace KashirinDBApi.Controllers
                                 ID = reader.GetInt32(0),
                                 Author = reader.GetString(1),
                                 Created = reader
-                                            .GetDateTime(2)
+                                            .GetTimeStamp(2)
+                                            .DateTime
                                             .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
                                 Forum = reader.GetString(3),
                                 IsEdited = reader.GetBoolean(4),
@@ -533,11 +536,11 @@ namespace KashirinDBApi.Controllers
                 cmd.Parameters.Add( new NpgsqlParameter("@from", from));
                 cmd.Parameters.Add( new NpgsqlParameter("@to", to));
 
-                using (var reader = await cmd.ExecuteReaderAsync())
+                using (var reader = cmd.ExecuteReader())
                 {
                     postPage.Posts = new List<PostDetailsDataContract>();
                     int? lastRN = null; 
-                    while(await reader.ReadAsync())
+                    while(reader.Read())
                     {
                         postPage.Posts.Add(
                             new PostDetailsDataContract()
@@ -545,7 +548,8 @@ namespace KashirinDBApi.Controllers
                                 ID = reader.GetInt32(0),
                                 Author = reader.GetString(1),
                                 Created = reader
-                                            .GetDateTime(2)
+                                            .GetTimeStamp(2)
+                                            .DateTime
                                             .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
                                 Forum = reader.GetString(3),
                                 IsEdited = reader.GetBoolean(4),

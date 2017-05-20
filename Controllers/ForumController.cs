@@ -110,7 +110,7 @@ namespace KashirinDBApi.Controllers
                     cmd.Parameters.Add(
                         Helper.NewNullableParameter("@title", thread.Title));
                     
-                    using (var reader = await cmd.ExecuteReaderAsync())
+                    using (var reader = cmd.ExecuteReader())
                     {
                         if(await reader.ReadAsync())
                         {
@@ -122,7 +122,8 @@ namespace KashirinDBApi.Controllers
                             newThread.ID = reader.GetInt32(1);
                             newThread.Author = reader.GetValueOrDefault(2, "");
                             newThread.Created = reader
-                                        .GetDateTime(3)
+                                        .GetTimeStamp(3)
+                                        .DateTime
                                         .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
                             newThread.Forum = reader.GetValueOrDefault(4, "");
                             newThread.Message = reader.GetValueOrDefault(5, "");
@@ -204,7 +205,7 @@ namespace KashirinDBApi.Controllers
                         cmd.Parameters.Add(Helper.NewNullableParameter("@since", since, NpgsqlDbType.Timestamp));
                         cmd.Parameters.Add(new NpgsqlParameter("@limit", limit));
                         
-                        using (var reader = await cmd.ExecuteReaderAsync())
+                        using (var reader = cmd.ExecuteReader())
                         {
                             while (await reader.ReadAsync())
                             {
@@ -212,7 +213,8 @@ namespace KashirinDBApi.Controllers
                                 {
                                     Author = reader.GetValueOrDefault(0, ""),
                                     Created = reader
-                                            .GetDateTime(1)
+                                            .GetTimeStamp(1)
+                                            .DateTime
                                             .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
                                     Forum = reader.GetValueOrDefault(2, ""),
                                     ID = reader.GetInt32(3),
