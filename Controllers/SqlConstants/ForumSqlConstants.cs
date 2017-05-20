@@ -43,10 +43,7 @@ where
 with tuple as 
 (
     select
-        case when @created is not null
-            then @created
-            else now()
-        end as created,
+        @created as created,
         @message as message,
         @slug as slug,
         @title as title,

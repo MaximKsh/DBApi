@@ -104,13 +104,13 @@ namespace KashirinDBApi.Controllers
                     cmd.Parameters.Add(
                         Helper.NewNullableParameter("@message", thread.Message));
                     cmd.Parameters.Add(
-                        Helper.NewNullableParameter("@created", thread.Created, NpgsqlDbType.Timestamp));
+                        Helper.NewNullableParameter("@created", thread.Created != null ? DateTime.Parse(thread.Created).ToUniversalTime() : DateTime.UtcNow, NpgsqlDbType.TimestampTZ));
                     cmd.Parameters.Add(
                         Helper.NewNullableParameter("@slug", thread.Slug));
                     cmd.Parameters.Add(
                         Helper.NewNullableParameter("@title", thread.Title));
                     
-                    using (var reader = cmd.ExecuteReader())
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
                         if(await reader.ReadAsync())
                         {
@@ -122,9 +122,9 @@ namespace KashirinDBApi.Controllers
                             newThread.ID = reader.GetInt32(1);
                             newThread.Author = reader.GetValueOrDefault(2, "");
                             newThread.Created = reader
-                                        .GetTimeStamp(3)
-                                        .DateTime
-                                        .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                                        .GetDateTime(3)
+                                        .ToUniversalTime()
+                                        .ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
                             newThread.Forum = reader.GetValueOrDefault(4, "");
                             newThread.Message = reader.GetValueOrDefault(5, "");
                             newThread.Slug = reader.GetValueOrDefault<string>(6, null);
@@ -205,7 +205,7 @@ namespace KashirinDBApi.Controllers
                         cmd.Parameters.Add(Helper.NewNullableParameter("@since", since, NpgsqlDbType.Timestamp));
                         cmd.Parameters.Add(new NpgsqlParameter("@limit", limit));
                         
-                        using (var reader = cmd.ExecuteReader())
+                        using (var reader = await cmd.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
@@ -213,9 +213,9 @@ namespace KashirinDBApi.Controllers
                                 {
                                     Author = reader.GetValueOrDefault(0, ""),
                                     Created = reader
-                                            .GetTimeStamp(1)
-                                            .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
+                                            .GetDateTime(1)
+                                            .ToUniversalTime()
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                                     Forum = reader.GetValueOrDefault(2, ""),
                                     ID = reader.GetInt32(3),
                                     Message = reader.GetValueOrDefault(4, ""),

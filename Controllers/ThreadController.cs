@@ -106,9 +106,9 @@ namespace KashirinDBApi.Controllers
             long threadID,
             string threadSlug,
             long forumID,
-            string forumSlug,
-            DateTime? created)
+            string forumSlug)
         {
+            var created = DateTime.UtcNow;
             List<PostDetailsDataContract> createdPosts = new List<PostDetailsDataContract>();
             using (var cmd = new NpgsqlCommand())
             {
@@ -117,7 +117,7 @@ namespace KashirinDBApi.Controllers
                     ThreadSqlConstants.SqlInsertPosts,
                     string.Join(",", Enumerable.Repeat("nextval('post_id_seq')", posts.Count))
                 );
-                cmd.Parameters.Add(Helper.NewNullableParameter("@created", created, NpgsqlDbType.Timestamp));
+                cmd.Parameters.Add(Helper.NewNullableParameter("@created", created, NpgsqlDbType.TimestampTZ));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_id", forumID, NpgsqlDbType.Integer));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@forum_slug", forumSlug));
                 cmd.Parameters.Add(Helper.NewNullableParameter("@thread_id", threadID, NpgsqlDbType.Integer));
@@ -129,7 +129,7 @@ namespace KashirinDBApi.Controllers
                 var transact = conn.BeginTransaction();
                 cmd.Transaction = transact;
                 bool conflict = false;
-                using(var reader = await cmd.ExecuteReaderAsync())
+                using(var reader = cmd.ExecuteReader())
                 {
                     while(await reader.ReadAsync())
                     {
@@ -142,7 +142,10 @@ namespace KashirinDBApi.Controllers
                         var createdPost = new PostDetailsDataContract();
                         createdPost.ID = reader.GetInt32(0);
                         createdPost.Author = reader.GetString(1);
-                        createdPost.Created = created.Value.ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
+                        createdPost.Created = reader
+                                                .GetDateTime(4)
+                                                .ToUniversalTime()
+                                                .ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
                         createdPost.Thread = threadID;
                         createdPost.Forum = forumSlug;
                         createdPost.IsEdited = false;
@@ -169,7 +172,6 @@ namespace KashirinDBApi.Controllers
         [HttpPost]
         public async Task<JsonResult> Create(string slug_or_id)
         {
-            var created = DateTime.Now;
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(List<PostDetailsDataContract>));
             var posts = (List<PostDetailsDataContract>)js.ReadObject(Request.Body);
 
@@ -188,8 +190,7 @@ namespace KashirinDBApi.Controllers
                         threadID.Value, 
                         threadSlug, 
                         forumID.Value, 
-                        forumSlug,
-                        created
+                        forumSlug
                     );   
                 }
                 else
@@ -204,14 +205,14 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/thread/{slug_or_id}/details")]
         [HttpPost]
-        public JsonResult DetailsPost(string slug_or_id)
+        public async Task<JsonResult> DetailsPost(string slug_or_id)
         {
             DataContractJsonSerializer js = new DataContractJsonSerializer(typeof(ThreadUpdateDataContract));
             var threadUpdate = (ThreadUpdateDataContract)js.ReadObject(Request.Body);
             var updatedThread = new ThreadDetailsDataContract();
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
@@ -229,15 +230,15 @@ namespace KashirinDBApi.Controllers
                     cmd.Parameters.Add(Helper.NewNullableParameter("@message", threadUpdate.Message));
                     
                     
-                    using (var reader = cmd.ExecuteReader())
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
-                        if(reader.Read())
+                        if(await reader.ReadAsync())
                         {
                             updatedThread.Author = reader.GetValueOrDefault(0, "");
                             updatedThread.Created = reader
-                                            .GetTimeStamp(1)
-                                            .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
+                                            .GetDateTime(1)
+                                            .ToUniversalTime()
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
                             updatedThread.Forum = reader.GetValueOrDefault(2, "");
                             updatedThread.ID = reader.GetInt32(3);
                             updatedThread.Message = reader.GetValueOrDefault(4, "");
@@ -259,12 +260,12 @@ namespace KashirinDBApi.Controllers
 
         [Route("api/thread/{slug_or_id}/details")]
         [HttpGet]
-        public JsonResult DetailsGet(string slug_or_id)
+        public async Task<JsonResult> DetailsGet(string slug_or_id)
         {
             ThreadDetailsDataContract thread = new ThreadDetailsDataContract();
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
-                conn.Open();
+                await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
@@ -279,15 +280,15 @@ namespace KashirinDBApi.Controllers
                                 new NpgsqlParameter("@id", id):
                                 new NpgsqlParameter("@slug", slug_or_id));
                     
-                    using (var reader = cmd.ExecuteReader())
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
-                        if(reader.Read())
+                        if(await reader.ReadAsync())
                         {
                             thread.Author = reader.GetValueOrDefault(0, "");
                             thread.Created = reader
-                                            .GetTimeStamp(1)
-                                            .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
+                                            .GetDateTime(1)
+                                            .ToUniversalTime()
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
                             thread.Forum = reader.GetValueOrDefault(2, "");
                             thread.ID = reader.GetInt32(3);
                             thread.Message = reader.GetValueOrDefault(4, "");
@@ -379,15 +380,15 @@ namespace KashirinDBApi.Controllers
                         
                         cmd.Parameters.Add(new NpgsqlParameter("@vote", vote.Voice > 0 ? 1 : -1){NpgsqlDbType = NpgsqlDbType.Integer});
 
-                        using (var reader = cmd.ExecuteReader())
+                        using (var reader = await cmd.ExecuteReaderAsync())
                         {
                             if(await reader.ReadAsync())
                             {
                                 updatedThread.Author = reader.GetValueOrDefault(0, "");
                                 updatedThread.Created = reader
-                                                .GetTimeStamp(1)
-                                                .DateTime
-                                                .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00");
+                                                .GetDateTime(1)
+                                                .ToUniversalTime()
+                                                .ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
                                 updatedThread.Forum = reader.GetValueOrDefault(2, "");
                                 updatedThread.ID = reader.GetInt32(3);
                                 updatedThread.Message = reader.GetValueOrDefault(4, "");
@@ -429,7 +430,7 @@ namespace KashirinDBApi.Controllers
                 cmd.Parameters.Add( new NpgsqlParameter("@from", from));
                 cmd.Parameters.Add( new NpgsqlParameter("@to", to));
             
-                using (var reader = cmd.ExecuteReader())
+                using (var reader = await cmd.ExecuteReaderAsync())
                 {
                     postPage.Posts = new List<PostDetailsDataContract>();
                     int? lastRN = null; 
@@ -441,9 +442,9 @@ namespace KashirinDBApi.Controllers
                                 ID = reader.GetInt32(0),
                                 Author = reader.GetString(1),
                                 Created = reader
-                                            .GetTimeStamp(2)
-                                            .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
+                                            .GetDateTime(2)
+                                            .ToUniversalTime()
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                                 Forum = reader.GetValueOrDefault(3, ""),
                                 IsEdited = reader.GetBoolean(4),
                                 Message = reader.GetValueOrDefault(5, ""),
@@ -483,7 +484,7 @@ namespace KashirinDBApi.Controllers
                 cmd.Parameters.Add( new NpgsqlParameter("@from", from));
                 cmd.Parameters.Add( new NpgsqlParameter("@to", to));
 
-                using (var reader = cmd.ExecuteReader())
+                using (var reader = await cmd.ExecuteReaderAsync())
                 {
                     postPage.Posts = new List<PostDetailsDataContract>();
                     int? lastRN = null; 
@@ -495,9 +496,9 @@ namespace KashirinDBApi.Controllers
                                 ID = reader.GetInt32(0),
                                 Author = reader.GetString(1),
                                 Created = reader
-                                            .GetTimeStamp(2)
-                                            .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
+                                            .GetDateTime(2)
+                                            .ToUniversalTime()
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                                 Forum = reader.GetString(3),
                                 IsEdited = reader.GetBoolean(4),
                                 Message = reader.GetValueOrDefault(5, ""),
@@ -536,11 +537,11 @@ namespace KashirinDBApi.Controllers
                 cmd.Parameters.Add( new NpgsqlParameter("@from", from));
                 cmd.Parameters.Add( new NpgsqlParameter("@to", to));
 
-                using (var reader = cmd.ExecuteReader())
+                using (var reader = await cmd.ExecuteReaderAsync())
                 {
                     postPage.Posts = new List<PostDetailsDataContract>();
                     int? lastRN = null; 
-                    while(reader.Read())
+                    while(await reader.ReadAsync())
                     {
                         postPage.Posts.Add(
                             new PostDetailsDataContract()
@@ -548,9 +549,9 @@ namespace KashirinDBApi.Controllers
                                 ID = reader.GetInt32(0),
                                 Author = reader.GetString(1),
                                 Created = reader
-                                            .GetTimeStamp(2)
-                                            .DateTime
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fff+03:00"),
+                                            .GetDateTime(2)
+                                            .ToUniversalTime()
+                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                                 Forum = reader.GetString(3),
                                 IsEdited = reader.GetBoolean(4),
                                 Message = reader.GetValueOrDefault(5, ""),
