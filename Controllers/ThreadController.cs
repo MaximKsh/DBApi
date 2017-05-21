@@ -187,14 +187,11 @@ namespace KashirinDBApi.Controllers
                 }
                 else
                 {
+                    await UpdatePostCount(conn, forumID, createdPosts.Count);
+                    await UpdateForumUsers(conn, forumID, authorIDs);
                     Response.StatusCode = 201;
                     await transact.CommitAsync();
                 }
-            }
-            if(Response.StatusCode == 201)
-            {
-                await UpdatePostCount(conn, forumID, createdPosts.Count);
-                await UpdateForumUsers(conn, forumID, authorIDs);
             }
             
             return createdPosts;
