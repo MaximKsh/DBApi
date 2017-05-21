@@ -73,6 +73,8 @@ CREATE TABLE post
     CONSTRAINT post_forum_id_fk FOREIGN KEY (forum_ID) REFERENCES forum (id),
     CONSTRAINT post_thread_id_fk FOREIGN KEY (thread_ID) REFERENCES thread (id)
 );
+create index "post_author_id_index" on public.post(author_id);
+create index "post_forum_id_index" on public.post(forum_id);
 create index "post_thread_id_parent_id_index" on public.post(thread_id, parent_id);
 create index "post_root_parent_ID_index" on public.post(root_parent_ID);
 
