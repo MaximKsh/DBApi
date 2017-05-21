@@ -77,9 +77,9 @@ limit 1;
         ";
 
         public static readonly string SqlForumFields = @"
-    (select count(1) from post where forum_id = f.ID) as forum_posts,
+    f.posts as forum_posts,
     f.slug as forum_slug,
-    (select count(1) from thread where forum_id = f.ID) as forum_threads,
+    f.threads as forum_threads,
     f.title as forum_title,
     f.user_name as forum_user, 
         ";
