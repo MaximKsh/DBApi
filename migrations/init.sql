@@ -65,6 +65,7 @@ CREATE TABLE post
     isEdited BOOLEAN DEFAULT FALSE ,
     message TEXT,
     parent_ID INT,
+    root_parent_ID INT,
     path INT[] default '{}'::INT[],
     thread_ID INT NOT NULL,
     thread_slug CITEXT COLLATE "ucs_basic",
@@ -76,7 +77,7 @@ create index "post_author_id_index" on public.post(author_id);
 create index "post_forum_id_index" on public.post(forum_id);
 create index "post_thread_id_parent_id_index" on public.post(thread_id, parent_id);
 create index "post_created_index" on public.post(created);
-
+create index "post_root_parent_ID_index" on public.post(root_parent_ID);
 
 CREATE TABLE vote
 (

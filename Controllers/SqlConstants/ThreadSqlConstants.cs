@@ -54,7 +54,7 @@ where
 
         public static readonly string SqlInsertPosts = @"
 insert into post(id, author_id, author_name, created, forum_id, forum_slug,
-                     message, parent_id, path, thread_id, thread_slug)
+                     message, parent_id, root_parent_id, path, thread_id, thread_slug)
 (  
     select
         t.id, 
@@ -67,6 +67,10 @@ insert into post(id, author_id, author_name, created, forum_id, forum_slug,
         case when t.pid = 0 
             then 0
             else p.id
+        end, 
+        case when t.pid = 0 
+            then t.id
+            else p.path[1]
         end, 
         array_append(coalesce(p.path, ARRAY[]::int[]), t.id::int),
         @thread_id,
@@ -194,7 +198,7 @@ select
     parent_id
 from post
 where
-    post.path[1] in 
+    post.root_parent_ID in 
     (
         select
             id
