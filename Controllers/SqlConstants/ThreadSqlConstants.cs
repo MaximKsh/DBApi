@@ -4,6 +4,20 @@ namespace KashirinDBApi.Controllers.SqlConstants
 {
     public static class ThreadSqlConstants
     {
+        public static readonly string SqlUpdateForumPostsCount = @"
+update forum set posts = posts + @cnt where id = @id        
+        ";
+
+        public static readonly string SqlInsertForumUsers = @"
+insert into forum_users(forum_ID, user_ID)
+    select
+        @forum_ID,
+        t.user_ID
+    from unnest(@ids) t(user_id)
+    on conflict do nothing
+;
+        ";
+
         private static readonly string SqlPreselectThreadAndForum = @"
 select
     t.ID,
@@ -68,7 +82,7 @@ insert into post(id, author_id, author_name, created, forum_id, forum_slug,
     left join post p on t.pid = p.id and p.thread_id = @thread_id
     order by ordinality
 )
-returning id, author_name, message, parent_id, created;
+returning id, author_id, author_name, message, parent_id, created;
         ";
 
         private static readonly string SqlSelectThreadDetails = @"

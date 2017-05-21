@@ -4,7 +4,15 @@ namespace KashirinDBApi.Controllers.SqlConstants
 {
     public static class ForumSqlConstants
     {
+        public static readonly string SqlUpdateThreadCount = 
+            "update forum set threads = threads + 1 where id = @id";
        
+        public static readonly string SqlInsertForumUsers = @"
+insert into forum_users(forum_ID, user_ID)
+values(@forum_ID, @user_ID)
+on conflict do nothing
+;
+        ";
 
         public static readonly string SqlInsertForum = @"
 with tuple as 
@@ -83,7 +91,8 @@ select
     slug,
     title,
     votes,
-    ins.forum_id
+    ins.forum_id,
+    ins.author_id
 from ins
 union all
 select
@@ -96,7 +105,8 @@ select
     th.slug,
     th.title,
     th.votes,
-    th.forum_id
+    th.forum_id,
+    th.author_id
 FROM thread as th 
 where th.slug = (select slug from tuple)
         ";
@@ -148,17 +158,16 @@ limit @limit
             string.Format(SqlSelectForumThreads, "<=", "desc");
 
         public static readonly string SqlSelectForumUsers = @"
-select distinct
+select
     u.about,
     u.email,
     u.fullname,
     u.nickname
-from ""user"" u
-left join thread t on u.ID = t.author_ID and t.forum_id = @forum_id
-left join post p on u.ID = p.author_ID and p.forum_id = @forum_id
+from forum_users fu
+join ""user"" u on fu.user_ID = u.ID
 where 
-    (p.ID is not null or t.ID is not null)
-    and (@since is null or u.nickname {0} @since::citext)
+    fu.forum_ID = @forum_id 
+        and (@since is null or u.nickname {0} @since::citext)
 order by u.nickname {1}
 limit @limit
 ;

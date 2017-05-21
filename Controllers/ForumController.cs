@@ -27,6 +27,29 @@ namespace KashirinDBApi.Controllers
         }
         #endregion
 
+        private async Task UpdateThreadCount(NpgsqlConnection conn, int forumID)
+        {
+            using (var cmd = new NpgsqlCommand())
+            {
+                cmd.Connection = conn;
+                cmd.CommandText = ForumSqlConstants.SqlUpdateThreadCount;
+                cmd.Parameters.Add(new NpgsqlParameter("@id", forumID));
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        private async Task UpdateForumUsers(NpgsqlConnection conn, long forumID, long userID)
+        {
+            using (var cmd = new NpgsqlCommand())
+            {
+                cmd.Connection = conn;
+                cmd.CommandText = ForumSqlConstants.SqlInsertForumUsers;
+                cmd.Parameters.Add(new NpgsqlParameter("@forum_ID", forumID));
+                cmd.Parameters.Add(new NpgsqlParameter("@user_ID", userID));
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
         [Route("api/forum/create")]
         [HttpPost]
         public async Task<JsonResult> Create()
@@ -93,6 +116,7 @@ namespace KashirinDBApi.Controllers
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
                 int? forumID = -1;
+                int authorID = -1;
                 await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
@@ -131,6 +155,7 @@ namespace KashirinDBApi.Controllers
                             newThread.Slug = reader.GetValueOrDefault<string>(6, null);
                             newThread.Title = reader.GetValueOrDefault(7, "");
                             forumID = reader.GetInt32(9);
+                            authorID = reader.GetInt32(10);
                         }
                         else
                         {
@@ -140,13 +165,8 @@ namespace KashirinDBApi.Controllers
                 }
                 if(Response.StatusCode == 201)
                 {
-                    using (var cmd = new NpgsqlCommand())
-                    {
-                        cmd.Connection = conn;
-                        cmd.CommandText = "update forum set threads = threads + 1 where id = @id";
-                        cmd.Parameters.Add(new NpgsqlParameter("@id", forumID));
-                        await cmd.ExecuteNonQueryAsync();
-                    }
+                    await UpdateThreadCount(conn, forumID.Value);
+                    await UpdateForumUsers(conn, forumID.Value, authorID);
                 }
             }
 

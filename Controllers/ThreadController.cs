@@ -100,6 +100,30 @@ namespace KashirinDBApi.Controllers
             return (threadID, threadSlug, userID);
         }
 
+        private async Task UpdatePostCount(NpgsqlConnection conn, long forumID, int cnt)
+        {
+            using (var cmdUpd = new NpgsqlCommand())
+            {
+                cmdUpd.Connection = conn;
+                cmdUpd.CommandText = ThreadSqlConstants.SqlUpdateForumPostsCount;
+                cmdUpd.Parameters.Add(new NpgsqlParameter("@id", forumID));
+                cmdUpd.Parameters.Add(new NpgsqlParameter("@cnt", cnt));
+                await cmdUpd.ExecuteNonQueryAsync();
+            }
+        }
+
+        private async Task UpdateForumUsers(NpgsqlConnection conn, long forumID, LinkedList<int> ids)
+        {
+            using (var cmdUpd = new NpgsqlCommand())
+            {
+                cmdUpd.Connection = conn;
+                cmdUpd.CommandText = ThreadSqlConstants.SqlInsertForumUsers;
+                cmdUpd.Parameters.Add(new NpgsqlParameter("@forum_ID", forumID));
+                cmdUpd.Parameters.Add(new NpgsqlParameter("@ids", ids.ToArray()){NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer});
+                await cmdUpd.ExecuteNonQueryAsync();
+            }
+        }
+
         private async Task<List<PostDetailsDataContract>> InsertPosts(
             NpgsqlConnection conn,
             List<PostDetailsDataContract> posts,
@@ -110,6 +134,7 @@ namespace KashirinDBApi.Controllers
         {
             var created = DateTime.UtcNow;
             List<PostDetailsDataContract> createdPosts = new List<PostDetailsDataContract>();
+            var authorIDs = new LinkedList<int>();
             using (var cmd = new NpgsqlCommand())
             {
                 cmd.Connection = conn;
@@ -133,7 +158,7 @@ namespace KashirinDBApi.Controllers
                 {
                     while(await reader.ReadAsync())
                     {
-                        if(reader.IsDBNull(3))
+                        if(reader.IsDBNull(4))
                         {
                             conflict = true;
                             break;
@@ -141,16 +166,17 @@ namespace KashirinDBApi.Controllers
                         
                         var createdPost = new PostDetailsDataContract();
                         createdPost.ID = reader.GetInt32(0);
-                        createdPost.Author = reader.GetString(1);
+                        authorIDs.AddLast(reader.GetInt32(1));
+                        createdPost.Author = reader.GetString(2);
                         createdPost.Created = reader
-                                                .GetDateTime(4)
+                                                .GetDateTime(5)
                                                 .ToUniversalTime()
                                                 .ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
                         createdPost.Thread = threadID;
                         createdPost.Forum = forumSlug;
                         createdPost.IsEdited = false;
-                        createdPost.Message = reader.GetString(2);
-                        createdPost.Parent = reader.GetInt32(3);
+                        createdPost.Message = reader.GetString(3);
+                        createdPost.Parent = reader.GetInt32(4);
                         createdPosts.Add(createdPost);
                     }
                 }
@@ -167,14 +193,8 @@ namespace KashirinDBApi.Controllers
             }
             if(Response.StatusCode == 201)
             {
-                using (var cmdUpd = new NpgsqlCommand())
-                {
-                    cmdUpd.Connection = conn;
-                    cmdUpd.CommandText = "update forum set posts = posts + @cnt where id = @id";
-                    cmdUpd.Parameters.Add(new NpgsqlParameter("@id", forumID));
-                    cmdUpd.Parameters.Add(new NpgsqlParameter("@cnt", createdPosts.Count));
-                    await cmdUpd.ExecuteNonQueryAsync();
-                }
+                await UpdatePostCount(conn, forumID, createdPosts.Count);
+                await UpdateForumUsers(conn, forumID, authorIDs);
             }
             
             return createdPosts;

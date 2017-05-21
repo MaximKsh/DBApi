@@ -11,6 +11,7 @@ CREATE TABLE "user"
 CREATE UNIQUE INDEX user_email_uindex ON public."user" (email);
 CREATE UNIQUE INDEX user_nickname_uindex ON public."user" (nickname);
 
+
 CREATE TABLE forum
 (
     ID SERIAL PRIMARY KEY NOT NULL,
@@ -23,6 +24,16 @@ CREATE TABLE forum
     CONSTRAINT forum_user_id_fk FOREIGN KEY (user_ID) REFERENCES "user" (id)
 );
 CREATE UNIQUE INDEX "forum_slug_uindex" ON public.forum (slug);
+
+CREATE TABLE forum_users
+(
+    id SERIAL PRIMARY KEY NOT NULL,
+    forum_ID INT NOT NULL,
+    user_ID INT NOT NULL,
+    CONSTRAINT forum_users_forum_id_fk FOREIGN KEY (forum_ID) REFERENCES forum (id),
+    CONSTRAINT forum_users_user_id_fk FOREIGN KEY (user_ID) REFERENCES "user" (id)
+);
+CREATE UNIQUE INDEX "forum_users_forum_id_user_id_uindex" ON public.forum_users (forum_ID, user_ID);
 
 CREATE TABLE thread
 (
