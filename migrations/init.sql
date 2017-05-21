@@ -1,5 +1,5 @@
 create extension if not exists "citext";
-
+SET SYNCHRONOUS_COMMIT = 'off';
 CREATE TABLE "user"
 (
     ID SERIAL PRIMARY KEY NOT NULL,
