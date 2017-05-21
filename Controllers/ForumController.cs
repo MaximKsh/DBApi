@@ -92,6 +92,7 @@ namespace KashirinDBApi.Controllers
             ThreadDetailsDataContract newThread = new ThreadDetailsDataContract();
             using (var conn = new NpgsqlConnection(Configuration["connection_string"]))
             {
+                int? forumID = -1;
                 await conn.OpenAsync();
                 using (var cmd = new NpgsqlCommand())
                 {
@@ -129,12 +130,23 @@ namespace KashirinDBApi.Controllers
                             newThread.Message = reader.GetValueOrDefault(5, "");
                             newThread.Slug = reader.GetValueOrDefault<string>(6, null);
                             newThread.Title = reader.GetValueOrDefault(7, "");
+                            forumID = reader.GetInt32(9);
                         }
                         else
                         {
                             Response.StatusCode = 404;
                         }
                     }  
+                }
+                if(Response.StatusCode == 201)
+                {
+                    using (var cmd = new NpgsqlCommand())
+                    {
+                        cmd.Connection = conn;
+                        cmd.CommandText = "update forum set threads = threads + 1 where id = @id";
+                        cmd.Parameters.Add(new NpgsqlParameter("@id", forumID));
+                        await cmd.ExecuteNonQueryAsync();
+                    }
                 }
             }
 

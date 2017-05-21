@@ -92,32 +92,18 @@ where {0} ;
              string.Format(SqlSelectThreadDetails, "lower(t.slug) = lower(@slug)") ;
 
         private static readonly string SqlUpdateThreadDetails = @"
-with ins as
-(
-    update thread
-    set
-        title = case when @title is not null 
-                    then @title
-                    else title
-        end,
-        message = case when @message is not null 
-                    then @message
-                    else message
-        end
-    where {0}
-    returning author_name, created, forum_slug, id, message, slug, title, votes
-)
-select
-    t.author_name as author,
-    t.created,
-    t.forum_slug as forum,
-    t.id,
-    t.message,
-    t.slug,
-    t.title,
-    t.votes
-from ins t
-;
+update thread
+set
+    title = case when @title is not null 
+                then @title
+                else title
+    end,
+    message = case when @message is not null 
+                then @message
+                else message
+    end
+where {0}
+returning author_name, created, forum_slug, id, message, slug, title, votes
         ";
 
         public static readonly string SqlUpdateThreadDetailsByID = 
@@ -152,71 +138,21 @@ returning
 
         public static readonly string SqlSelectPostsFlat = @"
 select
-    *
-from
-(
-    select
-        p.id,
-        p.author_name,
-        p.created,
-        p.forum_slug,
-        p.isedited,
-        p.message,
-        p.parent_id,
-        row_number() over (order by created {0}, p.id {0}) as rn
-    from post p
-    where p.thread_id = @id
-    order by created {0}, p.id {0} -- asc desc
-) t
-where 
-    @from <= rn and rn < @to
+    p.id,
+    p.author_name,
+    p.created,
+    p.forum_slug,
+    p.isedited,
+    p.message,
+    p.parent_id
+from post p
+where p.thread_id = @id
+order by created {0}, p.id {0}
+limit @limit
+offset @from
         ;";
 
         public static readonly string SqlSelectPosts = @"
-select 
-    *
-from 
-(
-    select
-        id,
-        author_name,
-        created,
-        forum_slug,
-        isedited,
-        message,
-        parent_id,
-        row_number() over (order by p.path {0}) as rn
-    from post p 
-    where thread_id = @id
-) t
-where 
-    @from <= rn and rn < @to
-order by rn 
-        ";
-
-
-        public static readonly string SqlSelectPostsParentTree = @"
-with roots as
-(
-    select 
-        id,
-        rn
-    from
-    (
-        select
-            id,
-            row_number() over (order by id {0}) as rn
-        from post
-        where
-            parent_id = 0
-            and thread_id = @id
-    )t
-    where @from <= rn and rn < @to
-),
-new_marker as
-(
-    select max(rn) as marker from roots
-)        
 select
     id,
     author_name,
@@ -224,11 +160,38 @@ select
     forum_slug,
     isedited,
     message,
-    parent_id,
-    (select marker from new_marker)
+    parent_id
+from post p 
+where thread_id = @id
+order by path {0}
+limit @limit
+offset @from
+        ";
+
+
+        public static readonly string SqlSelectPostsParentTree = @"
+select
+    id,
+    author_name,
+    created,
+    forum_slug,
+    isedited,
+    message,
+    parent_id
 from post
 where
-    post.path[1] in (select id from roots)
+    post.path[1] in 
+    (
+        select
+            id
+        from post
+        where
+            parent_id = 0
+            and thread_id = @id
+        order by id {0}
+        limit @limit
+        offset @from
+    )
 order by post.path {0}
         ";
     }

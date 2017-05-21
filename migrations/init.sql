@@ -17,6 +17,8 @@ CREATE TABLE forum
     title VARCHAR(300),
     user_ID INT NOT NULL,
     user_name VARCHAR(300),
+    posts INT NOT NULL DEFAULT 0,
+    threads INT NOT NULL DEFAULT 0,
     CONSTRAINT forum_user_id_fk FOREIGN KEY (user_ID) REFERENCES "user" (id)
 );
 CREATE UNIQUE INDEX "forum_slug_uindex" ON public.forum (lower(slug));

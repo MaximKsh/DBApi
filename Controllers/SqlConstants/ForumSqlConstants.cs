@@ -82,7 +82,8 @@ select
     message,
     slug,
     title,
-    votes
+    votes,
+    ins.forum_id
 from ins
 union all
 select
@@ -94,7 +95,8 @@ select
     th.message,
     th.slug,
     th.title,
-    th.votes
+    th.votes,
+    th.forum_id
 FROM thread as th 
 where lower(th.slug) = (select lower(slug) from tuple)
         ";
@@ -102,9 +104,9 @@ where lower(th.slug) = (select lower(slug) from tuple)
 
         public static readonly string SqlSelectForumDetails = @"
 select
-    (select count(1) from post where forum_id = f.ID) as posts,
+    posts,
     slug,
-    (select count(1) from thread where forum_id = f.ID) as threads,
+    threads,
     title,
     user_name
 from forum f

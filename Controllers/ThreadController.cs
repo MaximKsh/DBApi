@@ -165,6 +165,18 @@ namespace KashirinDBApi.Controllers
                     await transact.CommitAsync();
                 }
             }
+            if(Response.StatusCode == 201)
+            {
+                using (var cmdUpd = new NpgsqlCommand())
+                {
+                    cmdUpd.Connection = conn;
+                    cmdUpd.CommandText = "update forum set posts = posts + @cnt where id = @id";
+                    cmdUpd.Parameters.Add(new NpgsqlParameter("@id", forumID));
+                    cmdUpd.Parameters.Add(new NpgsqlParameter("@cnt", createdPosts.Count));
+                    await cmdUpd.ExecuteNonQueryAsync();
+                }
+            }
+            
             return createdPosts;
         }
 
@@ -333,22 +345,8 @@ namespace KashirinDBApi.Controllers
                 using (var cmd = new NpgsqlCommand())
                 {
                     cmd.Connection = conn;
-                    if(sort == "flat")
-                    {
-                        postPage = await SelectFlat(conn, marker, limit, threadID.Value, desc);
-                    }
-                    else if(sort == "tree")
-                    {
-                        postPage = await SelectTree(conn, marker, limit, threadID.Value, desc);
-                    }
-                    else if(sort == "parent_tree")
-                    {
-                        postPage = await SelectParentTree(conn, marker, limit, threadID.Value, desc);
-                    }
-                    else
-                    {
-                        Response.StatusCode = 400;
-                    }
+                    string query = GetPostsQuery(sort, desc);
+                    postPage = await SelectPosts(conn, query, marker, limit, threadID.Value, desc);
                 }
             }
 
@@ -408,8 +406,27 @@ namespace KashirinDBApi.Controllers
             return new JsonResult( Response.StatusCode == 200  ? updatedThread as object : string.Empty );
         }
         
+        private string GetPostsQuery(string sort, bool desc)
+        {
+            string query = "{0}";
+            if(sort == "flat")
+            {
+                query = ThreadSqlConstants.SqlSelectPostsFlat;
+            }
+            else if(sort == "tree")
+            {
+                query = ThreadSqlConstants.SqlSelectPosts;
+            }
+            else if(sort == "parent_tree")
+            {
+                query = ThreadSqlConstants.SqlSelectPostsParentTree;
+            }
+            return string.Format(query, desc ?  "desc": "");
+        }
 
-        private async Task<PostPageDataContract> SelectFlat(NpgsqlConnection conn,
+        private async Task<PostPageDataContract> SelectPosts(
+                                                NpgsqlConnection conn,
+                                                string query,
                                                 string marker,
                                                 int? limit,
                                                 long threadID,
@@ -419,21 +436,16 @@ namespace KashirinDBApi.Controllers
             using (var cmd = new NpgsqlCommand())
             {
                 cmd.Connection = conn;
-                cmd.CommandText = string.Format(
-                    ThreadSqlConstants.SqlSelectPostsFlat,
-                    desc ?  "desc": ""
-                );
-
-                int from = Int32.TryParse(marker, out int fromInt) ? fromInt : 1;
-                int to = limit.HasValue ? from + limit.Value : int.MaxValue;
+                cmd.CommandText = query;
+                int from = Int32.TryParse(marker, out int fromInt) ? fromInt : 0;
+                int lim = limit ?? int.MaxValue;
                 cmd.Parameters.Add( new NpgsqlParameter("@id", threadID) );
                 cmd.Parameters.Add( new NpgsqlParameter("@from", from));
-                cmd.Parameters.Add( new NpgsqlParameter("@to", to));
+                cmd.Parameters.Add( new NpgsqlParameter("@limit", lim));
             
                 using (var reader = await cmd.ExecuteReaderAsync())
                 {
                     postPage.Posts = new List<PostDetailsDataContract>();
-                    int? lastRN = null; 
                     while(await reader.ReadAsync())
                     {
                         postPage.Posts.Add(
@@ -452,120 +464,18 @@ namespace KashirinDBApi.Controllers
                                 Thread = threadID
                             }
                         );
-                        lastRN = reader.GetInt32(7);
                     }
-                    postPage.Marker = lastRN != null ?
-                                     (lastRN.Value + 1).ToString():
-                                      marker;
+                    if(postPage.Posts.Count != 0)
+                    {
+                        postPage.Marker = (lim != int.MaxValue ? from + lim : int.MaxValue).ToString();
+                    }
+                    else
+                    {
+                        postPage.Marker = marker ?? "0";
+                    }
                 }
             }
 
-            return postPage;
-        }
-
-        private async Task<PostPageDataContract> SelectTree(NpgsqlConnection conn,
-                                                string marker,
-                                                int? limit,
-                                                long threadID,
-                                                bool desc)
-        {
-            var postPage = new PostPageDataContract();
-            using (var cmd = new NpgsqlCommand())
-            {
-                cmd.Connection = conn;
-                cmd.CommandText = string.Format(
-                        ThreadSqlConstants.SqlSelectPosts,
-                        desc ? "desc": ""
-                );
-
-                int from = Int32.TryParse(marker, out int fromInt) ? fromInt : 1;
-                int to = limit.HasValue ? from + limit.Value : int.MaxValue;
-                cmd.Parameters.Add( new NpgsqlParameter("@id", threadID) );
-                cmd.Parameters.Add( new NpgsqlParameter("@from", from));
-                cmd.Parameters.Add( new NpgsqlParameter("@to", to));
-
-                using (var reader = await cmd.ExecuteReaderAsync())
-                {
-                    postPage.Posts = new List<PostDetailsDataContract>();
-                    int? lastRN = null; 
-                    while(await reader.ReadAsync())
-                    {
-                        postPage.Posts.Add(
-                            new PostDetailsDataContract()
-                            {
-                                ID = reader.GetInt32(0),
-                                Author = reader.GetString(1),
-                                Created = reader
-                                            .GetDateTime(2)
-                                            .ToUniversalTime()
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                                Forum = reader.GetString(3),
-                                IsEdited = reader.GetBoolean(4),
-                                Message = reader.GetValueOrDefault(5, ""),
-                                Parent = reader.GetValueOrDefault(6, 0),
-                                Thread = threadID
-                            }
-                        );
-                        lastRN = reader.GetInt32(7);
-                    }
-                    postPage.Marker = lastRN != null ?
-                                        (lastRN.Value + 1).ToString():
-                                        marker;
-                }
-            }     
-            return postPage;
-        }
-
-        private async Task<PostPageDataContract> SelectParentTree(NpgsqlConnection conn,
-                                                      string marker,
-                                                      int? limit,
-                                                      long threadID,
-                                                      bool desc)
-        {
-            var postPage = new PostPageDataContract();
-            using (var cmd = new NpgsqlCommand())
-            {
-                cmd.Connection = conn;
-                cmd.CommandText = string.Format(
-                        ThreadSqlConstants.SqlSelectPostsParentTree,
-                        desc ? "desc": ""
-                );
-
-                int from = Int32.TryParse(marker, out int fromInt) ? fromInt : 1;
-                int to = limit.HasValue ? from + limit.Value : int.MaxValue;
-                cmd.Parameters.Add( new NpgsqlParameter("@id", threadID) );
-                cmd.Parameters.Add( new NpgsqlParameter("@from", from));
-                cmd.Parameters.Add( new NpgsqlParameter("@to", to));
-
-                using (var reader = await cmd.ExecuteReaderAsync())
-                {
-                    postPage.Posts = new List<PostDetailsDataContract>();
-                    int? lastRN = null; 
-                    while(await reader.ReadAsync())
-                    {
-                        postPage.Posts.Add(
-                            new PostDetailsDataContract()
-                            {
-                                ID = reader.GetInt32(0),
-                                Author = reader.GetString(1),
-                                Created = reader
-                                            .GetDateTime(2)
-                                            .ToUniversalTime()
-                                            .ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                                Forum = reader.GetString(3),
-                                IsEdited = reader.GetBoolean(4),
-                                Message = reader.GetValueOrDefault(5, ""),
-                                Parent = reader.GetValueOrDefault(6, 0),
-                                Thread = threadID
-                            }
-                        );
-                        lastRN = reader.GetInt32(7);
-                    }
-                    postPage.Marker = lastRN != null ?
-                                        (lastRN.Value + 1).ToString():
-                                        marker;
-                }
-            }     
             return postPage;
         }
     }
