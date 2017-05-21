@@ -19,7 +19,7 @@ where
         public static readonly string SqlPreselectThreadAndForumByID =
             string.Format(SqlPreselectThreadAndForum, "t.id = @id");
         public static readonly string SqlPreselectThreadAndForumBySlug = 
-            string.Format(SqlPreselectThreadAndForum, "lower(t.slug) = lower(@slug)");
+            string.Format(SqlPreselectThreadAndForum, "t.slug = @slug::citext");
 
         private static readonly string SqlPreselectThreadAndUser = @"
 select
@@ -29,14 +29,14 @@ select
 from thread t, ""user"" u
 where 
     {0}
-    and lower(u.nickname) = lower(@nickname)
+    and u.nickname = @nickname::citext
 ;
         ";
 
         public static readonly string SqlPreselectThreadAndUserByID =
             string.Format(SqlPreselectThreadAndUser, "t.id = @id");
         public static readonly string SqlPreselectThreadAndUserBySlug = 
-            string.Format(SqlPreselectThreadAndUser, "lower(t.slug) = lower(@slug)");
+            string.Format(SqlPreselectThreadAndUser, "t.slug = @slug::citext");
 
         public static readonly string SqlInsertPosts = @"
 insert into post(id, author_id, author_name, created, forum_id, forum_slug,
@@ -48,7 +48,7 @@ insert into post(id, author_id, author_name, created, forum_id, forum_slug,
         u.nickname,
         now(),
         @forum_id,
-        @forum_slug,
+        @forum_slug::citext,
         t.msg,
         case when t.pid = 0 
             then 0
@@ -56,7 +56,7 @@ insert into post(id, author_id, author_name, created, forum_id, forum_slug,
         end, 
         array_append(coalesce(p.path, ARRAY[]::int[]), t.id::int),
         @thread_id,
-        @thread_slug
+        @thread_slug::citext
     from
         unnest(
             ARRAY[{0}],
@@ -64,7 +64,7 @@ insert into post(id, author_id, author_name, created, forum_id, forum_slug,
             @authors,
             @messages
         ) with ordinality t(id, pid, author_name, msg)
-    join ""user"" u on lower(t.author_name) = lower(u.nickname)
+    join ""user"" u on t.author_name = u.nickname
     left join post p on t.pid = p.id and p.thread_id = @thread_id
     order by ordinality
 )
@@ -89,7 +89,7 @@ where {0} ;
             string.Format(SqlSelectThreadDetails, "t.id = @id") ;
 
         public static readonly string SqlSelectThreadDetailsByName = 
-             string.Format(SqlSelectThreadDetails, "lower(t.slug) = lower(@slug)") ;
+             string.Format(SqlSelectThreadDetails, "t.slug = @slug::citext") ;
 
         private static readonly string SqlUpdateThreadDetails = @"
 update thread
@@ -110,7 +110,7 @@ returning author_name, created, forum_slug, id, message, slug, title, votes
             string.Format(SqlUpdateThreadDetails, "id = @id") ;
 
         public static readonly string SqlUpdateThreadDetailsByName = 
-             string.Format(SqlUpdateThreadDetails, "lower(slug) = lower(@slug)") ;
+             string.Format(SqlUpdateThreadDetails, "slug = @slug::citext") ;
 
 
         public static readonly string SqlInsertVote = @"

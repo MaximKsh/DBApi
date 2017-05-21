@@ -15,7 +15,7 @@ with tuple as
         u.id as user_id,
         u.nickname as nickname
     from ""user"" u
-        where lower(nickname) = lower(@nickname)
+        where nickname = @nickname::citext
 ),
 ins as 
 (
@@ -35,7 +35,7 @@ union all
 select 'selected' AS status, f.id, f.slug, f.title, f.user_id, f.user_name
 from forum as f
 where
-    lower(f.slug) = lower(@slug);
+    f.slug = @slug::citext;
 ";
 
 
@@ -45,7 +45,7 @@ with tuple as
     select
         @created as created,
         @message as message,
-        @slug as slug,
+        @slug::citext as slug,
         @title as title,
         u.id as author_id,
         u.nickname as author_name,
@@ -53,8 +53,8 @@ with tuple as
         ff.slug as forum_slug
     from ""user"" u, forum ff
     where
-        lower(u.nickname) = lower(@nickname)
-        and lower(slug) = lower(@forum_slug)
+        u.nickname = @nickname::citext
+        and slug = @forum_slug::citext
 ),
 ins as 
 (
@@ -98,7 +98,7 @@ select
     th.votes,
     th.forum_id
 FROM thread as th 
-where lower(th.slug) = (select lower(slug) from tuple)
+where th.slug = (select slug from tuple)
         ";
 
 
@@ -111,7 +111,7 @@ select
     user_name
 from forum f
 where
-   lower(f.slug) = lower(@slug)
+   f.slug = @slug::citext
 ;
         ";
 
@@ -119,7 +119,7 @@ where
 select
     ID
 from forum
-where lower(slug) = lower(@slug)
+where slug = @slug::citext
 limit 1;
         ";
         private static readonly string SqlSelectForumThreads = @"
@@ -152,15 +152,14 @@ select distinct
     u.about,
     u.email,
     u.fullname,
-    u.nickname,
-    convert_to(lower(u.nickname), 'utf8')
+    u.nickname
 from ""user"" u
 left join thread t on u.ID = t.author_ID and t.forum_id = @forum_id
 left join post p on u.ID = p.author_ID and p.forum_id = @forum_id
 where 
     (p.ID is not null or t.ID is not null)
-    and (@since is null or convert_to(lower(u.nickname), 'utf8') {0} convert_to(lower(@since), 'utf8')) 
-order by convert_to(lower(u.nickname), 'utf8') {1}
+    and (@since is null or u.nickname {0} @since::citext)
+order by u.nickname {1}
 limit @limit
 ;
         ";

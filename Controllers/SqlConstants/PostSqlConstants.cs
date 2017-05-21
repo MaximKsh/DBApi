@@ -5,9 +5,7 @@ namespace KashirinDBApi.Controllers.SqlConstants
     public static class PostSqlConstants
     {
         public static readonly string SqlUpdatePost = @"
-with upd as
-(
-    update
+update
         post
     set
         isedited = case when message = @message
@@ -28,17 +26,6 @@ with upd as
               parent_id, 
               thread_id,
               thread_slug
-)
-select
-    up.id,
-    up.author_name,
-    up.created,
-    up.forum_slug,
-    up.isedited,
-    up.message,
-    up.parent_id,
-    up.thread_id
-from upd up
 ;
  ";
 

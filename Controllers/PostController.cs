@@ -124,16 +124,16 @@ namespace KashirinDBApi.Controllers
                             {
                                 postDetails = new PostDetailsDataContract();
                                 postDetails.ID = reader.GetInt32(0);
-                                postDetails.Author = reader.GetString(1);
+                                postDetails.Author = reader.GetString(2);
                                 postDetails.Created = reader
-                                                .GetDateTime(2)
+                                                .GetDateTime(3)
                                                 .ToUniversalTime()
                                                 .ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
-                                postDetails.Forum = reader.GetValueOrDefault(3, "");
-                                postDetails.IsEdited = reader.GetBoolean(4);
-                                postDetails.Message = reader.GetValueOrDefault(5, "");
-                                postDetails.Parent = reader.GetValueOrDefault(6, 0);
-                                postDetails.Thread = reader.GetInt32(7);
+                                postDetails.Forum = reader.GetValueOrDefault(5, "");
+                                postDetails.IsEdited = reader.GetBoolean(6);
+                                postDetails.Message = reader.GetValueOrDefault(7, "");
+                                postDetails.Parent = reader.GetValueOrDefault(8, 0);
+                                postDetails.Thread = reader.GetInt32(9);
                                 Response.StatusCode = 200;
                             }
                             else

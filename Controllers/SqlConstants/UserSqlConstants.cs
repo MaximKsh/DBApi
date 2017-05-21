@@ -8,7 +8,7 @@ namespace KashirinDBApi.Controllers.SqlConstants
 with ins as 
 (
     insert into ""user"" (about, email, fullname, nickname)
-    values (@about, @email, @fullname, @nickname)
+    values (@about, @email::citext, @fullname, @nickname::citext)
     on conflict do nothing
     returning id, about, email, fullname, nickname
 )
@@ -29,8 +29,8 @@ select
     u.fullname, 
     u.nickname
 from ""user"" u
-where lower(u.email) = lower(@email)
-    or lower(u.nickname) = lower(@nickname)
+where u.email = @email::citext
+    or u.nickname = @nickname::citext
         ";
 
         public static readonly string SqlSelectProfile = @"
@@ -41,7 +41,7 @@ select
     nickname
 from ""user""
 where 
-    lower(nickname) = lower(@name)
+    nickname = @name::citext
 ;
         ";
 
@@ -58,7 +58,7 @@ set
         else fullname
     end
 where
-    lower(nickname) = lower(@nickname)
+    nickname = @nickname::citext
 returning about, email, fullname, nickname, 'updated'
 ;
         ";
@@ -69,8 +69,8 @@ with same_email(ID) as
         ID
     from ""user""
     where
-        lower(email) = lower(@email)
-        and lower(nickname) <> lower(@nickname)
+        email = @email::citext
+        and nickname <> @nickname::citext
 ),
 upd as (
     update
@@ -78,7 +78,7 @@ upd as (
     set
         email = case
             when exists(select * from same_email) then email
-            else @email
+            else @email::citext
         end,
         about = case
             when @about is not null then @about
@@ -89,7 +89,7 @@ upd as (
             else fullname
         end
     where
-        lower(nickname) = lower(@nickname)
+        nickname = @nickname::citext
     returning about, email, fullname, nickname
 )
 select
